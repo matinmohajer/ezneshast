@@ -98,7 +98,6 @@ export default function HomePage() {
         Upload Audio File
         <input
           type="file"
-          accept="audio/*"
           onChange={handleFileUpload}
           className="hidden"
         />

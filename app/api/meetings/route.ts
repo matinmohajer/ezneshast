@@ -34,16 +34,40 @@ export async function POST(req: Request) {
 
     // Summarize with Groq LLM
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.3-70b-versatile", // Using a powerful model
       temperature: 0.3,
       messages: [
         {
           role: 'system',
-          content: 'You are an assistant that writes concise, actionable meeting minutes. you have to write in persian and use markdown format.',
+          content: `
+            You are an assistant that writes **concise, actionable meeting minutes**. You need to:
+            - Write in **Persian**.
+            - Structure the summary with **clear headings** in **GitHub-flavored markdown**.
+            - Provide a **concise bullet summary** of the meeting with **key points**, **decisions**, and **takeaways**.
+            - Extract **action items** (if mentioned) in a **checklist** format with **assigned roles**.
+            - **Generate relevant tables** if data is mentioned (e.g., meeting schedule, attendance).
+            - **Include charts** if numerical or structured data is mentioned (e.g., budgets, timelines).
+            - If **discussions** are mentioned, provide context and important insights.
+            - Summarize the **outcomes** and suggest **next steps**.
+            - If the meeting involves a **project update**, include a **timeline table** and highlight important deadlines.
+            - Format all your output in **markdown** with the required structure.
+    
+            Keep the tone **professional** and make the summary easy to read and understand.
+          `,
         },
         {
           role: 'user',
-          content: `TRANSCRIPT:\n\n${transcript}\n\nPlease write:\n• A concise bullet summary (key points, decisions)\n• A checklist of action items with assignees if mentioned\n\nFormat the output in GitHub-flavored Markdown with clear headings.`,
+          content: `
+            TRANSCRIPT:
+            \n\n${transcript}
+            \n\nPlease write:
+            • A **concise bullet summary** (key points, decisions, and takeaways)
+            • A **checklist of action items** with assignees if mentioned
+            • **Tables** if any data (e.g., schedules, timelines, budgets) is discussed
+            • **Charts** (if numerical data like percentages, growth, or budgets are mentioned)
+            • **Clear headings** for each section (Summary, Action Items, Data, etc.)
+            Format the output in **GitHub-flavored Markdown**.
+          `,
         },
       ],
     });
