@@ -1,103 +1,109 @@
-import Image from "next/image";
+// app/page.tsx
+'use client';
 
-export default function Home() {
+import { useState, useRef, useTransition } from 'react';
+import { createMeetingDoc } from '@/lib/api';
+import ReactMarkdown from 'react-markdown';
+
+export default function HomePage() {
+  /* ─────────── UI & recording state ─────────── */
+  const [recording, setRecording]         = useState(false);
+  const [audioURL,  setAudioURL]          = useState<string | null>(null);
+  const [summaryMd, setSummaryMd]         = useState<string | null>(null);
+  const [transcript, setTranscript]       = useState<string | null>(null);
+  const mediaRecorderRef                  = useRef<MediaRecorder | null>(null);
+  const chunksRef                         = useRef<BlobPart[]>([]);
+  const [isPending, startTransition]      = useTransition();
+
+  /* ─────────── handlers ─────────── */
+  const startRecording = async () => {
+    if (recording) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+
+    recorder.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      chunksRef.current = [];
+      setAudioURL(URL.createObjectURL(blob));
+
+      // ⬇︎ upload ➜ Whisper ➜ Groq
+      startTransition(async () => {
+        try {
+          const { markdown, transcript } = await createMeetingDoc(blob);
+          setSummaryMd(markdown);
+          setTranscript(transcript);
+        } catch (err) {
+          console.error(err);
+          alert('Upload or AI processing failed – check console.');
+        }
+      });
+    };
+
+    recorder.start();
+    mediaRecorderRef.current = recorder;
+    setRecording(true);
+  };
+
+  const stopRecording = () => {
+    if (!recording || !mediaRecorderRef.current) return;
+    mediaRecorderRef.current.stop();
+    mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
+    setRecording(false);
+  };
+
+  const downloadMd = () => {
+    if (!summaryMd) return;
+    const blob = new Blob([summaryMd], { type: 'text/markdown' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), {
+      href: url,
+      download: 'meeting-summary.md',
+    });
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /* ─────────── UI ─────────── */
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 space-y-6">
+      <h1 className="text-2xl font-bold">Voice Agent — Record Meeting</h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      <button
+        onClick={recording ? stopRecording : startRecording}
+        className="rounded-xl bg-blue-600 px-6 py-3 text-white shadow transition hover:bg-blue-700 disabled:opacity-50"
+        disabled={isPending}
+      >
+        {recording ? 'Stop Recording' : 'Start Recording'}
+      </button>
+
+      {audioURL && (
+        <section className="w-full max-w-md text-center space-y-2">
+          <h2 className="text-lg font-semibold">Preview</h2>
+          <audio controls src={audioURL} className="w-full" />
+        </section>
+      )}
+
+      {isPending && <p className="text-sm text-gray-500">Processing…</p>}
+
+      {summaryMd && (
+        <section className="w-full max-w-2xl space-y-4" dir="rtl">
+          <h2 className="text-lg font-semibold" >Summary (Markdown)</h2>
+          <ReactMarkdown >{summaryMd}</ReactMarkdown>
+
+          <h2 className="text-lg font-semibold">Full Transcript</h2>
+          <pre className="whitespace-pre-wrap text-xs max-h-96 overflow-y-auto border p-4 rounded ">
+            {transcript}
+          </pre>
+
+          <button
+            onClick={downloadMd}
+            className="rounded border px-4 py-2 hover:bg-gray-100"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            Download .md
+          </button>
+        </section>
+      )}
+    </main>
   );
 }
