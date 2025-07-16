@@ -94,7 +94,7 @@ export default function HomePage() {
         {recording ? 'Stop Recording' : 'Start Recording'}
       </button>
 
-      <label className="cursor-pointer bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">
+      <label className="cursor-pointer  px-4 py-2 rounded ">
         Upload Audio File
         <input
           type="file"
