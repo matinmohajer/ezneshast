@@ -64,6 +64,23 @@ export default function HomePage() {
     URL.revokeObjectURL(url);
   };
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAudioURL(URL.createObjectURL(file)); // Optional: preview uploaded audio
+
+    startTransition(async () => {
+      try {
+        const { markdown, transcript } = await createMeetingDoc(file);
+        setSummaryMd(markdown);
+        setTranscript(transcript);
+      } catch (err) {
+        console.error(err);
+        alert('Upload or AI processing failed – check console.');
+      }
+    });
+  };
+
   /* ─────────── UI ─────────── */
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 space-y-6">
@@ -76,6 +93,16 @@ export default function HomePage() {
       >
         {recording ? 'Stop Recording' : 'Start Recording'}
       </button>
+
+      <label className="cursor-pointer bg-gray-200 px-4 py-2 rounded hover:bg-gray-300">
+        Upload Audio File
+        <input
+          type="file"
+          accept="audio/*"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+      </label>
 
       {audioURL && (
         <section className="w-full max-w-md text-center space-y-2">
