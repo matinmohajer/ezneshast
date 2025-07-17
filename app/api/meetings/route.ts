@@ -25,49 +25,26 @@ export async function POST(req: Request) {
     const transcription = await groq.audio.transcriptions.create({
       file: fileForGroq,
       model: "whisper-large-v3",
-      temperature: 0.1,
+      temperature: 0.41,
       language: "fa", // or "en"
       response_format: "verbose_json",
     });
 
     const transcript = transcription.text;
 
-    // Summarize with Groq LLM
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile", // Using a powerful model
-      temperature: 0.3,
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.1,
       messages: [
         {
           role: 'system',
-          content: `
-            You are an assistant that writes **concise, actionable meeting minutes**. You need to:
-            - Write in **Persian**.
-            - Structure the summary with **clear headings** in **GitHub-flavored markdown**.
-            - Provide a **concise bullet summary** of the meeting with **key points**, **decisions**, and **takeaways**.
-            - Extract **action items** (if mentioned) in a **checklist** format with **assigned roles**.
-            - **Generate relevant tables** if data is mentioned (e.g., meeting schedule, attendance).
-            - **Include charts** if numerical or structured data is mentioned (e.g., budgets, timelines).
-            - If **discussions** are mentioned, provide context and important insights.
-            - Summarize the **outcomes** and suggest **next steps**.
-            - If the meeting involves a **project update**, include a **timeline table** and highlight important deadlines.
-            - Format all your output in **markdown** with the required structure.
-    
-            Keep the tone **professional** and make the summary easy to read and understand.
-          `,
+          "content": "شما یک دستیار خلاصه‌نویس هستید که رونویسی جلسات را به فارسی و به صورت Markdown خلاصه می‌کند. از افزودن هرگونه اطلاعاتی که در متن جلسه نیامده خودداری کن. خروجی باید شامل بخش‌های مربوط (مثلاً خلاصهٔ کلی، موارد اقدام و ...) باشد و فقط بر اساس متن ارائه‌شده تولید شود."
+
         },
         {
           role: 'user',
-          content: `
-            TRANSCRIPT:
-            \n\n${transcript}
-            \n\nPlease write:
-            • A **concise bullet summary** (key points, decisions, and takeaways)
-            • A **checklist of action items** with assignees if mentioned
-            • **Tables** if any data (e.g., schedules, timelines, budgets) is discussed
-            • **Charts** (if numerical data like percentages, growth, or budgets are mentioned)
-            • **Clear headings** for each section (Summary, Action Items, Data, etc.)
-            Format the output in **GitHub-flavored Markdown**.
-          `,
+          "content": `متن جلسه:\n\n\n${transcript}\n\nلطفاً خلاصهٔ این جلسه را به فارسی و در قالب Markdown تهیه کن.`
+
         },
       ],
     });
