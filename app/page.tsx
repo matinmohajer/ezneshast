@@ -31,8 +31,8 @@ export default function HomePage() {
       // ⬇︎ upload ➜ Whisper ➜ Groq
       startTransition(async () => {
         try {
-          // const { markdown, transcript } = await createMeetingDoc(blob);
-          const { markdown, transcript } = await createMeetingDocOpenAI(blob);
+          const { markdown, transcript } = await createMeetingDoc(blob);
+          // const { markdown, transcript } = await createMeetingDocOpenAI(blob);
 
           setSummaryMd(markdown);
           setTranscript(transcript);
