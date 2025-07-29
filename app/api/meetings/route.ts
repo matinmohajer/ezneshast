@@ -9,7 +9,7 @@ import ffmpeg from "fluent-ffmpeg";
 import { randomUUID } from "crypto";
 import { mkdir } from "fs/promises";
 import { readdir } from "fs/promises";
-import { File as NodeFile } from "formdata-node";
+import { createReadStream } from "fs";
 
 export async function POST(req: Request) {
   try {
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     // --- Chunking: 45s chunks, silence-aware, sorted ---
     const chunkDir = path.join(tmpdir(), `chunks-${randomUUID()}`);
     await mkdir(chunkDir, { recursive: true });
-    const chunkDuration = 10; // or 15
+    const chunkDuration = 30; // or 15
     // const overlap = 3; // not used
     const chunkBase = path.join(chunkDir, "chunk_%03d.wav");
     console.log(`[meetings] Starting FFmpeg chunking to: ${chunkBase}`);
@@ -118,22 +118,28 @@ export async function POST(req: Request) {
     const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
     let transcript = "";
-    const prompt =
-      "موضوع جلسه درباره بهره‌وری بود و سخنران اصلی آقای حسینی بود.";
-
+    const prompt = `
+این یک جلسه رسمی به زبان فارسی است. افراد درباره موضوعاتی مثل بهره‌وری، مدیریت پروژه، برنامه‌ریزی و تصمیم‌گیری صحبت می‌کنند. 
+گفت‌وگو را با نگارش رسمی، بدون غلط تایپی یا گرامری، و با علائم نگارشی مناسب مثل نقطه و ویرگول رونویسی کن. 
+اسامی اشخاص، مکان‌ها و اصطلاحات تخصصی باید درست و بدون تحریف نوشته شوند. 
+از حذف یا ساده‌سازی جملات خودداری کن.
+اگر جمله‌ای ناقص بود، آن را به‌صورت طبیعی کامل کن. 
+اگر صدای گوینده واضح نیست، چیزی اضافه نکن.
+`.trim();
     // Helper: retry logic
     async function transcribeWithRetry(
-      fileForGroq: File,
+      chunkPath: string,
       retries = 3
     ): Promise<string> {
       let lastErr: unknown;
       for (let i = 0; i < retries; i++) {
         try {
+          const fileStream = createReadStream(chunkPath);
           const result: unknown = await groq.audio.transcriptions.create({
-            file: fileForGroq,
+            file: fileStream,
             model: "whisper-large-v3",
             language: "fa",
-            temperature: 0.41,
+            temperature: 0.1,
             response_format: "text",
             prompt,
           });
@@ -161,23 +167,14 @@ export async function POST(req: Request) {
     for (let i = 0; i < chunkPaths.length; i++) {
       const chunkPath = chunkPaths[i];
       console.log(`[meetings] Reading chunk file: ${chunkPath}`);
-      const chunkBuf = await (await import("fs/promises")).readFile(chunkPath);
-      let chunkText = "";
-      const fileForGroq = new NodeFile([chunkBuf], path.basename(chunkPath), {
-        type: "audio/wav",
-      });
       let response: string;
       try {
         console.log(
-          `[meetings] Transcribing chunk ${i + 1}/${
+          `[meetings] Transcribing chunk ${i + 1}/$${
             chunkPaths.length
           }: ${chunkPath}`
         );
-        response = await transcribeWithRetry({
-          file: chunkBuf, // pass Buffer directly
-          filename: path.basename(chunkPath),
-          mimetype: "audio/wav",
-        });
+        response = await transcribeWithRetry(chunkPath);
         console.log(
           `[meetings] Transcription result for chunk ${i + 1}:`,
           response.slice(0, 100)
@@ -189,8 +186,7 @@ export async function POST(req: Request) {
           err
         );
       }
-      chunkText = response;
-      transcript += chunkText + "\n\n";
+      transcript += response + "\n\n";
     }
 
     // --- Optional: segment stitching/realignment placeholder ---
