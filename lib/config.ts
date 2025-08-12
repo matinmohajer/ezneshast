@@ -1,15 +1,21 @@
 export const MEETING_PROCESSOR_CONFIG = {
   audioProcessor: {
-    chunkDuration: 30, // seconds per chunk
+    chunkDuration: 50, // seconds per chunk
     sampleRate: 16000, // Hz
     channels: 1, // mono
   },
   transcription: {
-    model: "whisper-large-v3",
+    model: "whisper-large-v3-turbo",
     language: "fa", // Persian
-    temperature: 0.41,
-    prompt:
-      "This is a meeting transcript. Please transcribe it without any additional information. do not make guesses , and keep in mind that the language is persian",
+    temperature: 0.0,
+    //     prompt: `
+    // این یک متن جلسه رسمی به زبان فارسی است.
+    // لطفاً فقط آنچه که شنیده می‌شود را عیناً رونویسی کن.
+    // از نوشتن اطلاعات اضافی یا حدس زدن خودداری کن.
+    // در صورت وجود کلمات تخصصی (مثلاً نام اشخاص یا اصطلاحات فنی)، همانطور که شنیده می‌شود بنویس.
+    // زبان: فارسی. رسم‌الخط: استاندارد.
+    // `,
+    prompt: "جلسه رسمی",
     maxRetries: 3,
   },
   summarization: {
@@ -22,13 +28,14 @@ export const MEETING_PROCESSOR_CONFIG = {
 
 export const AUDIO_FILTERS = {
   // High-pass filter to remove low-frequency noise
-  highpass: "highpass=f=200",
+  highpass: "highpass=f=100",
   // Low-pass filter to remove high-frequency noise
-  lowpass: "lowpass=f=3000",
+  lowpass: "lowpass=f=3800",
   // Dynamic audio normalization
-  dynaudnorm: "dynaudnorm",
+  dynaudnorm: "dynaudnorm=p=0.9:s=12",
   // FFT-based denoising
-  afftdn: "afftdn",
+  afftdn: "afftdn=nt=w",
+  compand: "compand=attacks=0:points=-80/-80|-40/-20|-20/-10|0/-5|20/-3",
   // Silence removal
   silenceremove:
     "silenceremove=start_periods=1:start_silence=0.5:start_threshold=-50dB",

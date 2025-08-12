@@ -16,7 +16,7 @@ export class AudioProcessor {
 
   constructor(config: AudioProcessorConfig = {}) {
     this.config = {
-      chunkDuration: config.chunkDuration ?? 30,
+      chunkDuration: config.chunkDuration ?? 60,
       sampleRate: config.sampleRate ?? 16000,
       channels: config.channels ?? 1,
     };
