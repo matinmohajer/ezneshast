@@ -14,6 +14,7 @@ export interface MeetingProcessorConfig {
     temperature?: number;
     prompt?: string;
     maxRetries?: number;
+    provider?: "elevenlabs" | "groq";
   };
   summarization?: {
     model?: string;

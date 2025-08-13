@@ -6,10 +6,20 @@ import { MEETING_PROCESSOR_CONFIG } from "../../../lib/config";
 
 export async function POST(req: Request) {
   try {
+    // Check for required API keys
     if (!process.env.GROQ_API_KEY) {
       return new Response(JSON.stringify({ error: "GROQ_API_KEY missing" }), {
         status: 500,
       });
+    }
+
+    if (!process.env.ELEVENLABS_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "ELEVENLABS_API_KEY missing" }),
+        {
+          status: 500,
+        }
+      );
     }
 
     console.log("[meetings] Received POST request");

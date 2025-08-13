@@ -1,8 +1,50 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ezneshast - Meeting Transcription and Summarization
+
+This is a [Next.js](https://nextjs.org) application that provides meeting transcription and summarization services using ElevenLabs and Groq APIs.
+
+## Features
+
+- **Audio Processing**: Chunks and preprocesses audio files for optimal transcription
+- **Speech-to-Text**: Uses ElevenLabs Scribe v1 model for high-quality transcription with fallback to Groq
+- **Meeting Summarization**: Generates structured summaries in Persian using Groq's Llama model
+- **Modern UI**: Clean, responsive interface for uploading and processing meeting recordings
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+1. **ElevenLabs API Key**: Get your API key from [ElevenLabs Dashboard](https://elevenlabs.io/)
+2. **Groq API Key**: Get your API key from [Groq Console](https://console.groq.com/)
+
+### Environment Setup
+
+Create a `.env.local` file in the root directory with your API keys:
+
+```bash
+# Required API Keys
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+
+# Optional: Override default configuration
+# TRANSCRIPTION_PROVIDER=elevenlabs
+# TRANSCRIPTION_LANGUAGE=fa
+```
+
+### Installation
+
+Install dependencies:
+
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+```
+
+### Development
+
+Run the development server:
 
 ```bash
 npm run dev
@@ -10,15 +52,13 @@ npm run dev
 yarn dev
 # or
 pnpm dev
-# or
-bun dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Configuration
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The application uses ElevenLabs as the primary transcription provider with automatic fallback to Groq if needed. You can configure the transcription settings in `lib/config.ts`.
 
 ## Learn More
 

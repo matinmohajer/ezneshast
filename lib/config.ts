@@ -5,7 +5,7 @@ export const MEETING_PROCESSOR_CONFIG = {
     channels: 1, // mono
   },
   transcription: {
-    model: "whisper-large-v3-turbo",
+    model: "scribe_v1", // ElevenLabs model
     language: "fa", // Persian
     temperature: 0.0,
     //     prompt: `
@@ -17,6 +17,7 @@ export const MEETING_PROCESSOR_CONFIG = {
     // `,
     prompt: "جلسه رسمی",
     maxRetries: 3,
+    provider: "elevenlabs", // Use ElevenLabs as primary provider
   },
   summarization: {
     model: "llama-3.3-70b-versatile",
