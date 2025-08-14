@@ -5,12 +5,11 @@ export const MEETING_PROCESSOR_CONFIG = {
     channels: 1, // mono
   },
   transcription: {
-    model: "scribe_v1", // ElevenLabs model
+    model: "scribe_v1", // Use Scribe v1 by default
     language: "fa", // Persian
     temperature: 0.0,
     prompt: "جلسه رسمی",
-    maxRetries: 3,
-    provider: "elevenlabs", // Use ElevenLabs as primary provider
+    maxRetries: 2,
   },
   summarization: {
     model: "llama-3.3-70b-versatile",

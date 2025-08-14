@@ -79,6 +79,10 @@ const customConfig = {
 };
 
 const processor = new MeetingProcessor(apiKey, customConfig);
+
+// Switch transcription model at runtime
+processor.setTranscriptionModel("whisper");
+const currentModel = processor.getTranscriptionModel();
 ```
 
 ### Individual Services
@@ -104,11 +108,26 @@ const summarizationService = new SummarizationService(apiKey);
 
 ### TranscriptionService
 
-- `model`: Whisper model to use (default: "whisper-large-v3")
+- `model`: Transcription model to use - "whisper" or "scribe_v1" (default: "scribe_v1")
 - `language`: Language code (default: "fa" for Persian)
 - `temperature`: Creativity level (default: 0.41)
 - `prompt`: Custom transcription prompt
 - `maxRetries`: Number of retry attempts (default: 3)
+
+**Model Switching**: You can dynamically switch between models:
+
+```typescript
+const transcriptionService = new TranscriptionService(apiKey);
+
+// Switch to Whisper
+transcriptionService.setModel("whisper");
+
+// Switch to Scribe v1
+transcriptionService.setModel("scribe_v1");
+
+// Get current model
+const currentModel = transcriptionService.getModel();
+```
 
 ### SummarizationService
 

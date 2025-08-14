@@ -7,7 +7,28 @@ This is a [Next.js](https://nextjs.org) application that provides meeting transc
 - **Audio Processing**: Chunks and preprocesses audio files for optimal transcription
 - **Speech-to-Text**: Uses ElevenLabs Scribe v1 model for high-quality transcription with fallback to Groq
 - **Meeting Summarization**: Generates structured summaries in Persian using Groq's Llama model
+- **Voice Recording**: Direct voice recording and transcription without file upload
+- **Meeting Minutes Generation**: Complete workflow from voice to structured meeting minutes
 - **Modern UI**: Clean, responsive interface for uploading and processing meeting recordings
+
+## Pages
+
+### 1. Meeting Processor (`/`)
+- Upload audio files for transcription and summarization
+- Uses FFmpeg for audio preprocessing and chunking
+- Best for pre-recorded meeting files
+
+### 2. Voice Transcribe (`/voice-transcribe`)
+- Direct voice recording and transcription
+- Uses ElevenLabs Scribe v1 for transcription
+- No audio preprocessing - direct API calls
+- Best for quick voice-to-text conversion
+
+### 3. Voice Meeting Minutes (`/voice-meeting-minutes`)
+- Complete voice-to-meeting-minutes workflow
+- Records voice → ElevenLabs transcription → Groq summarization
+- Generates structured meeting minutes in Persian
+- Best for live meeting capture and documentation
 
 ## Getting Started
 

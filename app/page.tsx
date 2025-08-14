@@ -86,7 +86,7 @@ export default function HomePage() {
 
   /* ─────────── UI ─────────── */
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 space-y-6">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 space-y-6 pt-20">
       <h1 className="text-2xl font-bold">Voice Agent — Record Meeting</h1>
 
       <button

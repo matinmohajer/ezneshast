@@ -1,5 +1,5 @@
 import { AudioProcessor } from "./audio-processor";
-import { TranscriptionService } from "./transcription-service";
+import { TranscriptionService, TranscriptionModel } from "./transcription-service";
 import { SummarizationService } from "./summarization-service";
 
 export interface MeetingProcessorConfig {
@@ -9,12 +9,11 @@ export interface MeetingProcessorConfig {
     channels?: number;
   };
   transcription?: {
-    model?: string;
+    model?: TranscriptionModel;
     language?: string;
     temperature?: number;
     prompt?: string;
     maxRetries?: number;
-    provider?: "elevenlabs" | "groq";
   };
   summarization?: {
     model?: string;
@@ -43,6 +42,20 @@ export class MeetingProcessor {
       apiKey,
       config.summarization
     );
+  }
+
+  /**
+   * Set the transcription model to use
+   */
+  setTranscriptionModel(model: TranscriptionModel): void {
+    this.transcriptionService.setModel(model);
+  }
+
+  /**
+   * Get the current transcription model
+   */
+  getTranscriptionModel(): TranscriptionModel {
+    return this.transcriptionService.getModel();
   }
 
   /**
