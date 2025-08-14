@@ -8,13 +8,6 @@ export const MEETING_PROCESSOR_CONFIG = {
     model: "scribe_v1", // ElevenLabs model
     language: "fa", // Persian
     temperature: 0.0,
-    //     prompt: `
-    // این یک متن جلسه رسمی به زبان فارسی است.
-    // لطفاً فقط آنچه که شنیده می‌شود را عیناً رونویسی کن.
-    // از نوشتن اطلاعات اضافی یا حدس زدن خودداری کن.
-    // در صورت وجود کلمات تخصصی (مثلاً نام اشخاص یا اصطلاحات فنی)، همانطور که شنیده می‌شود بنویس.
-    // زبان: فارسی. رسم‌الخط: استاندارد.
-    // `,
     prompt: "جلسه رسمی",
     maxRetries: 3,
     provider: "elevenlabs", // Use ElevenLabs as primary provider

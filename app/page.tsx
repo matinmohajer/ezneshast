@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useRef, useTransition } from "react";
-import { createMeetingDoc, createMeetingDocOpenAI } from "@/lib/api";
+import { createMeetingDoc } from "@/lib/api";
 import ReactMarkdown from "react-markdown";
 
 export default function HomePage() {
