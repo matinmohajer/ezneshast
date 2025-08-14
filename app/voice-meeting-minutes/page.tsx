@@ -240,7 +240,7 @@ export default function VoiceMeetingMinutesPage() {
             </div>
             
             <div className="bg-green-50 rounded-lg p-6 border border-green-200">
-              <div className="prose prose-sm max-w-none">
+              <div className="prose prose-sm max-w-none text-gray-900">
                 <div dangerouslySetInnerHTML={{ __html: result.meetingMinutes.replace(/\n/g, '<br>') }} />
               </div>
             </div>
@@ -259,7 +259,7 @@ export default function VoiceMeetingMinutesPage() {
             </div>
             
             <div className="bg-gray-50 rounded-lg p-6 border">
-              <pre className="whitespace-pre-wrap text-sm leading-relaxed">
+              <pre className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900">
                 {result.transcript}
               </pre>
             </div>

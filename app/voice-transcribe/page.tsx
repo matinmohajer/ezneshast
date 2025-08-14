@@ -208,7 +208,7 @@ export default function VoiceTranscribePage() {
           </div>
           
           <div className="bg-gray-50 rounded-lg p-6 border">
-            <pre className="whitespace-pre-wrap text-sm leading-relaxed">
+            <pre className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900">
               {transcript}
             </pre>
           </div>
