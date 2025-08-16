@@ -1,5 +1,8 @@
 import { AudioProcessor } from "./audio-processor";
-import { TranscriptionService, TranscriptionModel } from "./transcription-service";
+import {
+  TranscriptionService,
+  TranscriptionModel,
+} from "./transcription-service";
 import { SummarizationService } from "./summarization-service";
 
 export interface MeetingProcessorConfig {
@@ -24,7 +27,8 @@ export interface MeetingProcessorConfig {
 
 export interface ProcessingResult {
   transcript: string;
-  markdown: string;
+  markdown?: string; // Make markdown optional
+  error?: string; // Add optional error field for summarization failures
 }
 
 export class MeetingProcessor {
@@ -82,12 +86,22 @@ export class MeetingProcessor {
         chunkPaths
       );
 
-      // Step 5: Generate summary
-      const markdown = await this.summarizationService.generateSummary(
-        transcript
-      );
+      // Step 5: Generate summary (try but don't fail the whole process)
+      let markdown: string | undefined;
+      let error: string | undefined;
 
-      return { transcript, markdown };
+      try {
+        markdown = await this.summarizationService.generateSummary(transcript);
+      } catch (summaryError) {
+        console.error("[MeetingProcessor] Summarization failed:", summaryError);
+        error =
+          summaryError instanceof Error
+            ? summaryError.message
+            : "Summarization failed";
+        // Continue without failing - we still have the transcript
+      }
+
+      return { transcript, markdown, error };
     } finally {
       // Cleanup temporary files
       await this.audioProcessor.cleanupFiles(tempFiles);

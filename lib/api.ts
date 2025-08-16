@@ -5,7 +5,11 @@ export async function createMeetingDoc(blob: Blob) {
 
   const res = await fetch("/api/meetings", { method: "POST", body: form }); // API call to the /api/meetings route
   if (!res.ok) throw new Error(`API error ${res.status}`);
-  return (await res.json()) as { markdown: string; transcript: string }; // Returns the result
+  return (await res.json()) as {
+    transcript: string;
+    markdown?: string;
+    summarizationError?: string;
+  }; // Returns the result with optional fields
 }
 
 // lib/api.ts

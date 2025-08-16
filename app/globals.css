@@ -24,3 +24,55 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Markdown table styling with RTL support */
+.markdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  direction: rtl;
+}
+
+.markdown-table th,
+.markdown-table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.75rem;
+  text-align: right;
+}
+
+.markdown-table th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+
+.markdown-table tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+.markdown-table tr:hover {
+  background-color: #f3f4f6;
+}
+
+/* RTL support for markdown content */
+[dir="rtl"] .prose {
+  text-align: right;
+}
+
+[dir="rtl"] .prose h1,
+[dir="rtl"] .prose h2,
+[dir="rtl"] .prose h3,
+[dir="rtl"] .prose h4,
+[dir="rtl"] .prose h5,
+[dir="rtl"] .prose h6 {
+  text-align: right;
+}
+
+[dir="rtl"] .prose ul,
+[dir="rtl"] .prose ol {
+  padding-right: 1.5rem;
+  padding-left: 0;
+}
+
+[dir="rtl"] .prose li {
+  text-align: right;
+}

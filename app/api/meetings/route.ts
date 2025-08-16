@@ -42,9 +42,24 @@ export async function POST(req: Request) {
     );
 
     // Process the meeting
-    const { transcript, markdown } = await processor.processMeeting(fileBuffer);
+    const { transcript, markdown, error } = await processor.processMeeting(
+      fileBuffer
+    );
 
-    return new Response(JSON.stringify({ transcript, markdown }), {
+    // Return results with optional markdown and error information
+    const response: {
+      transcript: string;
+      markdown?: string;
+      summarizationError?: string;
+    } = { transcript };
+    if (markdown) {
+      response.markdown = markdown;
+    }
+    if (error) {
+      response.summarizationError = error;
+    }
+
+    return new Response(JSON.stringify(response), {
       status: 200,
     });
   } catch (err: unknown) {
