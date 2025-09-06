@@ -1,23 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { Database } from './supabase'
+import { cookies } from 'next/headers'
 
-// Environment validation
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
-}
-
-// Server-side Supabase client with cookies (for SSR)
 export async function createServerSupabaseClientWithCookies() {
   const cookieStore = await cookies()
-  
-  return createServerClient<Database>(
-    supabaseUrl!,
-    supabaseAnonKey!,
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
@@ -25,10 +15,10 @@ export async function createServerSupabaseClientWithCookies() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) =>
+            cookiesToSet.forEach(({ name, value, options }) => {
               cookieStore.set(name, value, options)
-            )
-          } catch {
+            })
+          } catch (error) {
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing
             // user sessions.
@@ -39,7 +29,6 @@ export async function createServerSupabaseClientWithCookies() {
   )
 }
 
-// Middleware helper for creating Supabase client
 export function createMiddlewareSupabaseClient(request: NextRequest) {
   let response = NextResponse.next({
     request: {
@@ -47,42 +36,40 @@ export function createMiddlewareSupabaseClient(request: NextRequest) {
     },
   })
 
-  const supabase = createServerClient<Database>(
-    supabaseUrl!,
-    supabaseAnonKey!,
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
             response.cookies.set(name, value, options)
-          )
+          })
         },
       },
     }
   )
 
-  return { supabase, response }
+  return supabase
 }
 
-// Helper to get user from server-side context
 export async function getServerUser() {
-  const supabase = await createServerSupabaseClientWithCookies()
-  const { data: { user }, error } = await supabase.auth.getUser()
-  
-  if (error) {
-    console.error('Error getting user:', error)
+  try {
+    const supabase = await createServerSupabaseClientWithCookies()
+    const { data: { user }, error } = await supabase.auth.getUser()
+    
+    if (error) {
+      console.error('Error getting server user:', error)
+      return null
+    }
+    
+    return user
+  } catch (error) {
+    console.error('Error in getServerUser:', error)
     return null
   }
-  
-  return user
 }
-

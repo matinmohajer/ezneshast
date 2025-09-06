@@ -1,13 +1,18 @@
 {
   "name": "ezneshast",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "Professional voice transcription and meeting minutes generation platform",
   "private": true,
   "scripts": {
-    "dev": "next dev ",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:elevenlabs": "node test-elevenlabs.js"
+    "lint:fix": "next lint --fix",
+    "type-check": "tsc --noEmit",
+    "test:elevenlabs": "node test-elevenlabs.js",
+    "charge:credits": "node scripts/charge-credits.js",
+    "clean": "rm -rf .next out dist"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.9.0",
@@ -35,5 +40,9 @@
     "eslint-config-next": "15.3.5",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }

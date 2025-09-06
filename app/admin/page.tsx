@@ -11,7 +11,7 @@ export default async function AdminPage() {
     redirect('/auth/signin')
   }
 
-  const isAdmin = await isAdminUser(user.email)
+  const isAdmin = await isAdminUser(user.email || '')
   if (!isAdmin) {
     redirect('/dashboard')
   }
@@ -28,14 +28,7 @@ export default async function AdminPage() {
         email
       )
     `)
-    .order('balance', { ascending: false }) as { data: Array<{
-      id: string;
-      user_id: string;
-      balance: number;
-      created_at: string;
-      updated_at: string;
-      user: { id: string; email: string } | null;
-    }> | null }
+    .order('balance', { ascending: false })
 
   // Get recent credit ledger entries across all users
   const { data: recentTransactions } = await supabase
@@ -47,15 +40,7 @@ export default async function AdminPage() {
       )
     `)
     .order('created_at', { ascending: false })
-    .limit(20) as { data: Array<{
-      id: string;
-      user_id: string;
-      amount: number;
-      reason: string;
-      reference: string | null;
-      created_at: string;
-      user: { email: string } | null;
-    }> | null }
+    .limit(20)
 
   return (
     <main className="min-h-screen bg-gray-50 py-8">
@@ -96,7 +81,7 @@ export default async function AdminPage() {
             <div className="p-6">
               {users && users.length > 0 ? (
                 <div className="space-y-4">
-                  {users.map((userCredit) => (
+                  {users.map((userCredit: any) => (
                     <div key={userCredit.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                       <div>
                         <p className="text-sm font-medium text-gray-900">
@@ -131,7 +116,7 @@ export default async function AdminPage() {
             <div className="p-6">
               {recentTransactions && recentTransactions.length > 0 ? (
                 <div className="space-y-4">
-                  {recentTransactions.map((transaction) => (
+                  {recentTransactions.map((transaction: any) => (
                     <div key={transaction.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{transaction.reason}</p>

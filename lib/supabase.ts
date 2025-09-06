@@ -1,108 +1,5 @@
+import { createClient } from '@supabase/supabase-js'
 import { createBrowserClient } from '@supabase/ssr'
-
-// Types for our database tables
-export interface Database {
-  public: {
-    Tables: {
-      credits: {
-        Row: {
-          id: string
-          user_id: string
-          balance: number
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          balance: number
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          balance?: number
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      credit_ledger: {
-        Row: {
-          id: string
-          user_id: string
-          amount: number
-          reason: string
-          reference: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          amount: number
-          reason: string
-          reference?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          amount?: number
-          reason?: string
-          reference?: string | null
-          created_at?: string
-        }
-      }
-      jobs: {
-        Row: {
-          id: string
-          user_id: string
-          type: string
-          status: string
-          cost: number
-          reference: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          type: string
-          status: string
-          cost: number
-          reference?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          type?: string
-          status?: string
-          cost?: number
-          reference?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
-    }
-    Functions: {
-      consume_credits: {
-        Args: {
-          p_cost: number
-          p_key: string
-          p_reason: string
-          p_ref?: string | null
-        }
-        Returns: {
-          success: boolean
-          new_balance: number
-          message: string
-        }
-      }
-    }
-  }
-}
 
 // Environment validation
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -113,10 +10,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-// Client-side Supabase client with proper SSR cookie handling
-export const supabase = createBrowserClient<Database>(
+// Client-side Supabase client (enhanced for SSR cookie handling)
+export const supabase = createBrowserClient(
   supabaseUrl,
-  supabaseAnonKey
+  supabaseAnonKey,
+  {
+    auth: {
+      detectSessionInUrl: true,
+      autoRefreshToken: true,
+      persistSession: true,
+    },
+  }
 )
 
 // Server-side Supabase client (for API routes)
@@ -124,14 +28,19 @@ export function createServerSupabaseClient() {
   if (!supabaseServiceKey) {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for server operations')
   }
-  
-  return createBrowserClient<Database>(supabaseUrl!, supabaseServiceKey!)
+
+  return createClient(supabaseUrl!, supabaseServiceKey!, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  })
 }
 
-// Helper to check if user is admin
-export async function isAdminUser(userEmail?: string | null): Promise<boolean> {
-  if (!userEmail) return false
+// Admin user check
+export async function isAdminUser(email: string): Promise<boolean> {
+  if (!email) return false
   
-  const adminEmails = process.env.ADMIN_EMAILS?.split(',') || []
-  return adminEmails.includes(userEmail.toLowerCase().trim())
+  const adminEmails = process.env.ADMIN_EMAILS?.split(',').map(e => e.trim()) || []
+  return adminEmails.includes(email)
 }

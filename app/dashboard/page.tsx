@@ -13,16 +13,14 @@ export default async function DashboardPage() {
   const supabase = await createServerSupabaseClientWithCookies()
   
   // Get user's credit balance
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: credits } = await (supabase as any)
+  const { data: credits } = await supabase
     .from('credits')
     .select('balance')
     .eq('user_id', user.id)
     .single()
 
   // Get recent credit ledger entries
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: ledgerEntries } = await (supabase as any)
+  const { data: ledgerEntries } = await supabase
     .from('credit_ledger')
     .select('*')
     .eq('user_id', user.id)
@@ -30,8 +28,7 @@ export default async function DashboardPage() {
     .limit(10)
 
   // Get recent jobs
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: jobs } = await (supabase as any)
+  const { data: jobs } = await supabase
     .from('jobs')
     .select('*')
     .eq('user_id', user.id)
@@ -86,7 +83,6 @@ export default async function DashboardPage() {
             <div className="p-6">
               {ledgerEntries && ledgerEntries.length > 0 ? (
                 <div className="space-y-4">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {ledgerEntries.map((entry: any) => (
                     <div key={entry.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                       <div>
@@ -117,7 +113,6 @@ export default async function DashboardPage() {
             <div className="p-6">
               {jobs && jobs.length > 0 ? (
                 <div className="space-y-4">
-                  {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                   {jobs.map((job: any) => (
                     <div key={job.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                       <div>

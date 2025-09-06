@@ -50,16 +50,19 @@ function formatTranscriptWithSpeakers(words: TranscriptWord[]): string {
     }
     
     // Add word to current sentence
-    currentSentence += word.text + " ";
+    if (word.text) {
+      currentSentence += word.text + " ";
+    }
   }
-  
+
   // Add the last sentence
   if (currentSentence.trim()) {
     formattedTranscript += currentSentence.trim();
   }
 
-  console.log("[formatTranscriptWithSpeakers] Found", uniqueSpeakers.size, "unique speakers:", Array.from(uniqueSpeakers));
-  console.log("[formatTranscriptWithSpeakers] Result preview:", formattedTranscript.slice(0, 200));
+  console.log("[formatTranscriptWithSpeakers] Unique speakers found:", uniqueSpeakers.size);
+  console.log("[formatTranscriptWithSpeakers] Formatted transcript preview:", 
+    formattedTranscript.slice(0, 200));
   
   return formattedTranscript;
 }
@@ -85,15 +88,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log("[voice-transcribe] User authenticated:", user.email);
+
     // Check credits before processing
     const supabase = createServerSupabaseClient();
     const transcriptionCost = 10; // Cost in credits for transcription
-    const idempotencyKey = `transcription_${user.id}_${Date.now()}`;
+    const idempotencyKey = `transcription_${user.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     console.log("[voice-transcribe] Checking credits for user:", user.id);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: creditResult, error: creditError } = await (supabase as any).rpc('consume_credits', {
+    // Use the new API-friendly function
+    const { data: creditResult, error: creditError } = await supabase.rpc('api_consume_credits', {
+      p_user_id: user.id,
       p_cost: transcriptionCost,
       p_key: idempotencyKey,
       p_reason: 'Voice transcription',
@@ -103,7 +109,7 @@ export async function POST(request: NextRequest) {
     if (creditError) {
       console.error("[voice-transcribe] Credit check error:", creditError);
       return NextResponse.json(
-        { error: "Credit system error" },
+        { error: "Credit system error", details: creditError.message },
         { status: 500 }
       );
     }
@@ -165,68 +171,33 @@ export async function POST(request: NextRequest) {
     let formattedTranscript: string;
     
     if (typeof transcription === "string") {
+      // Simple string response
       formattedTranscript = transcription;
-    } else if (transcription && typeof transcription === "object") {
-      // Check if it's the new format with words array and speaker information
-      if ("transcript" in transcription && 
-          typeof transcription.transcript === "object" &&
-          transcription.transcript !== null &&
-          "words" in transcription.transcript &&
-          Array.isArray(transcription.transcript.words)) {
-        
-        console.log("[voice-transcribe] Found words array, processing speaker diarization...");
-        // Process the words array to create speaker-separated transcript
-        formattedTranscript = formatTranscriptWithSpeakers(transcription.transcript.words);
-        
-      } else if ("words" in transcription && Array.isArray(transcription.words)) {
-        // Direct words array in the response
-        console.log("[voice-transcribe] Found direct words array, processing speaker diarization...");
-        formattedTranscript = formatTranscriptWithSpeakers(transcription.words);
-        
-      } else if ("text" in transcription && typeof transcription.text === "string") {
-        console.log("[voice-transcribe] Using text property directly");
-        formattedTranscript = transcription.text;
-      } else if (
-        "transcription" in transcription &&
-        typeof transcription.transcription === "string"
-      ) {
-        console.log("[voice-transcribe] Using transcription property");
-        formattedTranscript = transcription.transcription;
-      } else if (
-        "segments" in transcription &&
-        Array.isArray(transcription.segments)
-      ) {
-        console.log("[voice-transcribe] Using segments array");
-        // If it's a multichannel response, extract text from segments
-        formattedTranscript = transcription.segments
-          .map((segment: { text?: string }) => segment.text || "")
-          .join(" ");
-      } else {
-        console.log("[voice-transcribe] No recognized format, using JSON string");
-        formattedTranscript = JSON.stringify(transcription);
-      }
+    } else if (transcription.words && Array.isArray(transcription.words)) {
+      // Structured response with words
+      formattedTranscript = formatTranscriptWithSpeakers(transcription.words);
     } else {
-      formattedTranscript = "No transcription result";
+      // Fallback for other response types
+      formattedTranscript = JSON.stringify(transcription, null, 2);
     }
 
-    console.log("[voice-transcribe] Transcription completed:", {
-      length: formattedTranscript.length,
-      preview: formattedTranscript.slice(0, 100),
-    });
+    console.log("[voice-transcribe] Transcription completed successfully");
 
     return NextResponse.json({
       transcript: formattedTranscript,
-      rawTranscription: transcription,
-      model: "scribe_v1",
-      language: "fa",
+      metadata: {
+        language: "fa",
+        speakers: transcription.speakers || [],
+        audio_events: transcription.audio_events || [],
+        word_count: formattedTranscript.split(/\s+/).length,
+        job_id: creditResult.job_id
+      }
     });
-  } catch (error) {
-    console.error("[voice-transcribe] Error:", error);
-    
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    return NextResponse.json(
-      { error: `Transcription failed: ${errorMessage}` },
-      { status: 500 }
-    );
+
+  } catch (err: unknown) {
+    const message =
+      err instanceof Error ? err.message : "Internal server error";
+    console.error("API error:", err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

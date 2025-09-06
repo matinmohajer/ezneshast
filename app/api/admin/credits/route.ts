@@ -1,133 +1,61 @@
-import { createServerSupabaseClient } from '@/lib/supabase'
-import { getServerUser } from '@/lib/supabase-server'
+import { createServerSupabaseClientWithCookies, getServerUser } from '@/lib/supabase-server'
 import { isAdminUser } from '@/lib/supabase'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
   try {
-    // Check if user is authenticated and is admin
+    // Get authenticated user
     const user = await getServerUser()
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
     }
 
-    const isAdmin = await isAdminUser(user.email)
+    // Check if user is admin
+    const isAdmin = await isAdminUser(user.email || '')
     if (!isAdmin) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 
-    const { email, amount, reason } = await request.json()
+    // Parse and validate request body
+    const body = await request.json()
+    const { email, amount, reason } = body
 
-    if (!email || amount === undefined || !reason) {
-      return NextResponse.json(
-        { error: 'Email, amount, and reason are required' },
-        { status: 400 }
-      )
+    if (!email || !amount || !reason) {
+      return NextResponse.json({ error: 'Email, amount, and reason are required' }, { status: 400 })
     }
 
-    if (typeof amount !== 'number' || amount === 0) {
-      return NextResponse.json(
-        { error: 'Amount must be a non-zero number' },
-        { status: 400 }
-      )
+    const supabase = await createServerSupabaseClientWithCookies()
+
+    // Use a simpler approach - directly update credits using a custom RPC function
+    // that handles user lookup by email
+    const { data: creditResult, error: creditError } = await supabase.rpc('admin_update_credits', {
+      p_email: email,
+      p_amount: amount,
+      p_reason: reason,
+      p_admin_user_id: user.id
+    })
+
+    if (creditError) {
+      console.error('Credit update error:', creditError)
+      return NextResponse.json({ 
+        error: `Failed to update credits: ${creditError.message}` 
+      }, { status: 500 })
     }
 
-    const supabase = createServerSupabaseClient()
-
-    // Find user by email using a different approach
-    const { data: users, error: userError } = await supabase.auth.admin.listUsers()
-    
-    if (userError) {
-      return NextResponse.json(
-        { error: 'Failed to fetch users' },
-        { status: 500 }
-      )
-    }
-
-    const targetUser = users.users.find(user => user.email === email)
-    
-    if (!targetUser) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      )
-    }
-
-    const userId = targetUser.id
-
-    // Get current balance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: currentCredits, error: creditsError } = await (supabase as any)
-      .from('credits')
-      .select('balance')
-      .eq('user_id', userId)
-      .single()
-
-    if (creditsError) {
-      console.error('Error fetching current credits:', creditsError)
-      return NextResponse.json(
-        { error: 'Failed to fetch current balance' },
-        { status: 500 }
-      )
-    }
-
-    const currentBalance = currentCredits?.balance || 0
-    const newBalance = currentBalance + amount
-
-    // Check if new balance would be negative
-    if (newBalance < 0) {
-      return NextResponse.json(
-        { error: 'Insufficient credits to deduct this amount' },
-        { status: 400 }
-      )
-    }
-
-    // Update credits balance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateError } = await (supabase as any)
-      .from('credits')
-      .update({ balance: newBalance })
-      .eq('user_id', userId)
-
-    if (updateError) {
-      console.error('Error updating credits:', updateError)
-      return NextResponse.json(
-        { error: 'Failed to update credits' },
-        { status: 500 }
-      )
-    }
-
-    // Insert ledger entry
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: ledgerError } = await (supabase as any)
-      .from('credit_ledger')
-      .insert({
-        user_id: userId,
-        amount,
-        reason: `${reason} (by admin: ${user.email})`,
-        reference: `admin_${Date.now()}`
-      })
-
-    if (ledgerError) {
-      console.error('Error inserting ledger entry:', ledgerError)
-      // Note: We don't rollback the credits update here for simplicity
-      // In production, you might want to implement proper transaction handling
+    if (!creditResult.success) {
+      return NextResponse.json({ 
+        error: `Credit update failed: ${creditResult.message}` 
+      }, { status: 400 })
     }
 
     return NextResponse.json({
       success: true,
-      email,
-      amount,
-      previousBalance: currentBalance,
-      newBalance,
-      message: `Successfully ${amount > 0 ? 'added' : 'deducted'} ${Math.abs(amount)} credits`
+      message: `Successfully ${amount > 0 ? 'added' : 'deducted'} ${Math.abs(amount)} credits for ${email}`,
+      new_balance: creditResult.new_balance
     })
 
   } catch (error) {
-    console.error('Admin credit update error:', error)
-    return NextResponse.json(
-      { error: 'An unexpected error occurred' },
-      { status: 500 }
-    )
+    console.error('Admin credits error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
