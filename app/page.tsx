@@ -1,203 +1,116 @@
 // app/page.tsx
 "use client";
 
-import { useState, useRef, useTransition } from "react";
-import { createMeetingDoc } from "@/lib/api";
-import ReactMarkdown from "react-markdown";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function HomePage() {
-  /* ─────────── UI & recording state ─────────── */
-  const [recording, setRecording] = useState(false);
-  const [audioURL, setAudioURL] = useState<string | null>(null);
-  const [summaryMd, setSummaryMd] = useState<string | null>(null);
-  const [transcript, setTranscript] = useState<string | null>(null);
-  const [summarizationError, setSummarizationError] = useState<string | null>(
-    null
-  );
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
-  const [isPending, startTransition] = useTransition();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  // Function to clear previous results
-  const clearResults = () => {
-    setTranscript(null);
-    setSummaryMd(null);
-    setSummarizationError(null);
-  };
-
-  /* ─────────── handlers ─────────── */
-  const startRecording = async () => {
-    if (recording) return;
-    clearResults(); // Clear previous results when starting new recording
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const recorder = new MediaRecorder(stream);
-
-    recorder.ondataavailable = (e) =>
-      e.data.size && chunksRef.current.push(e.data);
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-      chunksRef.current = [];
-      setAudioURL(URL.createObjectURL(blob));
-
-      // ⬇︎ upload ➜ Whisper ➜ Groq
-      startTransition(async () => {
-        try {
-          const result = await createMeetingDoc(blob);
-
-          // Always set transcript if available
-          if (result.transcript) {
-            setTranscript(result.transcript);
-          }
-
-          // Set summary if available
-          if (result.markdown) {
-            setSummaryMd(result.markdown);
-          }
-
-          // Handle summarization error
-          if (result.summarizationError) {
-            setSummarizationError(result.summarizationError);
-          } else {
-            setSummarizationError(null);
-          }
-        } catch (err) {
-          console.error(err);
-          alert("Upload or AI processing failed – check console.");
-        }
+  useEffect(() => {
+    const getUser = async () => {
+      console.log('[HomePage] Checking authentication...');
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      console.log('[HomePage] Auth result:', {
+        user: user ? 'present' : 'missing',
+        error: error ? error.message : 'none',
+        userEmail: user?.email
       });
-    };
-
-    recorder.start();
-    mediaRecorderRef.current = recorder;
-    setRecording(true);
-  };
-
-  const stopRecording = () => {
-    if (!recording || !mediaRecorderRef.current) return;
-    mediaRecorderRef.current.stop();
-    mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
-    setRecording(false);
-  };
-
-  const downloadMd = () => {
-    if (!summaryMd) return;
-    const blob = new Blob([summaryMd], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement("a"), {
-      href: url,
-      download: "meeting-summary.md",
-    });
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    clearResults(); // Clear previous results when uploading new file
-    setAudioURL(URL.createObjectURL(file)); // Optional: preview uploaded audio
-
-    startTransition(async () => {
-      try {
-        const result = await createMeetingDoc(file);
-
-        // Always set transcript if available
-        if (result.transcript) {
-          setTranscript(result.transcript);
-        }
-
-        // Set summary if available
-        if (result.markdown) {
-          setSummaryMd(result.markdown);
-        }
-
-        // Handle summarization error
-        if (result.summarizationError) {
-          setSummarizationError(result.summarizationError);
-        } else {
-          setSummarizationError(null);
-        }
-      } catch (err) {
-        console.error(err);
-        alert("Upload or AI processing failed – check console.");
+      
+      setUser(user);
+      setLoading(false);
+      
+      // Redirect to dashboard if user is authenticated
+      if (user) {
+        console.log('[HomePage] User authenticated, redirecting to dashboard...');
+        router.push('/dashboard');
+      } else {
+        console.log('[HomePage] User not authenticated, showing landing page');
       }
-    });
-  };
+    };
+    
+    getUser();
+  }, [router]);
 
-  /* ─────────── UI ─────────── */
+  if (loading) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="text-gray-500 mt-4">Loading...</p>
+      </main>
+    );
+  }
+
+  if (user) {
+    // User is authenticated, show loading while redirecting
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="text-gray-500 mt-4">Redirecting to dashboard...</p>
+      </main>
+    );
+  }
+
+  // User is not authenticated, show landing page
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 space-y-6 pt-20">
-      <h1 className="text-2xl font-bold">Voice Agent — Record Meeting</h1>
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 space-y-8">
+      <div className="text-center space-y-4">
+        <h1 className="text-4xl font-bold text-gray-900">Voice Transcription App</h1>
+        <p className="text-xl text-gray-600 max-w-2xl">
+          Professional voice transcription with speaker diarization powered by ElevenLabs AI
+        </p>
+      </div>
 
-      <button
-        onClick={recording ? stopRecording : startRecording}
-        className="rounded-xl bg-blue-600 px-6 py-3 text-white shadow transition hover:bg-blue-700 disabled:opacity-50"
-        disabled={isPending}
-      >
-        {recording ? "Stop Recording" : "Start Recording"}
-      </button>
+      <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full space-y-6">
+        <div className="text-center">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Get Started</h2>
+          <p className="text-gray-600">Sign in to access voice transcription features</p>
+        </div>
 
-      <label className="cursor-pointer  px-4 py-2 rounded ">
-        Upload Audio File
-        <input type="file" onChange={handleFileUpload} className="hidden" />
-      </label>
-
-      {audioURL && (
-        <section className="w-full max-w-md text-center space-y-2">
-          <h2 className="text-lg font-semibold">Preview</h2>
-          <audio controls src={audioURL} className="w-full" />
-        </section>
-      )}
-
-      {isPending && <p className="text-sm text-gray-500">Processing…</p>}
-
-      {/* Show transcript as soon as it's available */}
-      {transcript && (
-        <section className="w-full max-w-2xl space-y-4" dir="rtl">
-          {/* Show summary if available */}
-          {summaryMd && (
-            <>
-              <h2 className="text-lg font-semibold">Summary (Markdown)</h2>
-              <ReactMarkdown>{summaryMd}</ReactMarkdown>
-            </>
-          )}
-
-          {/* Show summarization error if it occurred */}
-          {summarizationError && !summaryMd && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
-              <h2 className="text-lg font-semibold text-yellow-800">
-                Summary Generation Failed
-              </h2>
-              <p className="text-sm text-yellow-700">
-                Transcription completed successfully, but summary generation
-                failed: {summarizationError}
-              </p>
-            </div>
-          )}
-
-          {/* Show loading message if neither summary nor error */}
-          {!summaryMd && !summarizationError && (
-            <div className="bg-blue-50 border border-blue-200 rounded p-4">
-              <p className="text-sm text-blue-700">
-                Transcription completed! Summary is being generated...
-              </p>
-            </div>
-          )}
-
-          <h2 className="text-lg font-semibold">Full Transcript</h2>
-          <pre className="whitespace-pre-wrap text-xs max-h-96 overflow-y-auto border p-4 rounded ">
-            {transcript}
-          </pre>
-
-          <button
-            onClick={downloadMd}
-            className="rounded border px-4 py-2 hover:bg-gray-100"
+        <div className="space-y-4">
+          <Link
+            href="/auth/signin"
+            className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors text-center block font-medium"
           >
-            Download .md
-          </button>
-        </section>
-      )}
+            Sign In
+          </Link>
+          
+          <div className="text-center text-sm text-gray-500">
+            <p>New to our service? Just enter your email to get started!</p>
+          </div>
+        </div>
+
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Features</h3>
+          <ul className="space-y-2 text-sm text-gray-600">
+            <li className="flex items-center">
+              <span className="text-green-500 mr-2">✓</span>
+              High-quality voice transcription
+            </li>
+            <li className="flex items-center">
+              <span className="text-green-500 mr-2">✓</span>
+              Speaker diarization (identify different speakers)
+            </li>
+            <li className="flex items-center">
+              <span className="text-green-500 mr-2">✓</span>
+              Persian language support
+            </li>
+            <li className="flex items-center">
+              <span className="text-green-500 mr-2">✓</span>
+              Credit-based usage system
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="text-center text-sm text-gray-500">
+        <p>Powered by ElevenLabs AI • Secure & Private</p>
+      </div>
     </main>
   );
 }

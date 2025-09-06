@@ -11,6 +11,7 @@ import {
   chunkTranscript,
   mergeChunkSummaries,
   getChunkingRecommendations,
+  TranscriptChunk,
 } from "@/lib/transcript-chunker";
 
 /**
@@ -211,7 +212,7 @@ ${transcriptText}`;
     let meetingMinutes: string;
     let summarizationSuccess = false;
     let summarizationError: string | null = null;
-    let chunks: any[] = [];
+    let chunks: TranscriptChunk[] = [];
 
     try {
       if (chunkingRecommendations.estimatedChunks > 1) {

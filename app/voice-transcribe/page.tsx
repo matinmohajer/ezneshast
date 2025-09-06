@@ -1,6 +1,8 @@
  "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useTransition, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 
 export default function VoiceTranscribePage() {
   /* ─────────── UI & recording state ─────────── */
@@ -8,8 +10,37 @@ export default function VoiceTranscribePage() {
   const [audioURL, setAudioURL] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
+  const [credits, setCredits] = useState<number>(0);
+  const [error, setError] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+  const router = useRouter();
+
+  /* ─────────── authentication & credits ─────────── */
+  useEffect(() => {
+    const getUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/auth/signin?redirectTo=/voice-transcribe')
+        return
+      }
+      setUser(user)
+      
+      // Get user credits
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: creditsData } = await (supabase as any)
+        .from('credits')
+        .select('balance')
+        .eq('user_id', user.id)
+        .single()
+      
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setCredits((creditsData as any)?.balance || 0)
+    }
+    
+    getUser()
+  }, [router])
 
   /* ─────────── handlers ─────────── */
   const startRecording = async () => {
@@ -95,13 +126,49 @@ export default function VoiceTranscribePage() {
       body: formData,
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Transcription failed');
+      if (response.status === 402) {
+        // Insufficient credits
+        setError(`Insufficient credits. You have ${data.balance} credits but need ${data.required}. Please contact an administrator to add credits.`);
+        // Refresh credits
+        if (user) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const { data: creditsData } = await (supabase as any)
+            .from('credits')
+            .select('balance')
+            .eq('user_id', user.id)
+            .single()
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setCredits((creditsData as any)?.balance || 0)
+        }
+        throw new Error('Insufficient credits');
+      } else if (response.status === 401) {
+        // Not authenticated
+        router.push('/auth/signin?redirectTo=/voice-transcribe');
+        throw new Error('Authentication required');
+      } else {
+        throw new Error(data.error || 'Transcription failed');
+      }
     }
 
-    const data = await response.json();
-    return data.transcript;
+    console.log(data, "transcription data");
+    
+    // Refresh credits after successful transcription
+    if (user) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: creditsData } = await (supabase as any)
+        .from('credits')
+        .select('balance')
+        .eq('user_id', user.id)
+        .single()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setCredits((creditsData as any)?.balance || 0)
+    }
+    
+    // Return the formatted transcript from the API
+    return data.transcript || 'No transcript available';
   };
 
   const downloadTranscript = () => {
@@ -127,11 +194,73 @@ export default function VoiceTranscribePage() {
   };
 
   /* ─────────── UI ─────────── */
+  if (!user) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center p-4">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <p className="text-gray-500 mt-4">Loading...</p>
+      </main>
+    )
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 space-y-6 pt-20">
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold">Voice Transcription</h1>
         <p className="text-gray-600">Direct transcription using ElevenLabs Scribe v1</p>
+        <div className="flex items-center justify-center space-x-4 mt-4">
+          <div className="bg-blue-50 px-4 py-2 rounded-lg">
+            <span className="text-sm text-gray-600">Credits: </span>
+            <span className="font-semibold text-blue-600">{credits}</span>
+          </div>
+          <div className="bg-gray-50 px-4 py-2 rounded-lg">
+            <span className="text-sm text-gray-600">Cost: </span>
+            <span className="font-semibold text-gray-900">10 credits</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="w-full max-w-md bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setError(null)}
+                className="text-red-400 hover:text-red-600"
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <div className="flex space-x-4">
+        <a
+          href="/dashboard"
+          className="text-blue-600 hover:text-blue-800 text-sm"
+        >
+          ← Back to Dashboard
+        </a>
+        <a
+          href="/admin"
+          className="text-gray-600 hover:text-gray-800 text-sm"
+        >
+          Admin Panel
+        </a>
       </div>
 
       <div className="flex flex-col items-center space-y-4">
@@ -208,9 +337,9 @@ export default function VoiceTranscribePage() {
           </div>
           
           <div className="bg-gray-50 rounded-lg p-6 border">
-            <pre className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900">
+            <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900 font-mono">
               {transcript}
-            </pre>
+            </div>
           </div>
         </section>
       )}
