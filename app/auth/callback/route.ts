@@ -1,4 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase'
+import { createServerSupabaseClientWithCookies } from '@/lib/supabase-server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -12,9 +12,10 @@ export async function GET(request: NextRequest) {
     fullUrl: requestUrl.toString()
   })
 
+  const supabase = await createServerSupabaseClientWithCookies()
+
+  // For OAuth flows (with code parameter)
   if (code) {
-    const supabase = createServerSupabaseClient()
-    
     try {
       console.log('[auth/callback] Exchanging code for session...')
       const { data, error } = await supabase.auth.exchangeCodeForSession(code)
@@ -33,7 +34,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/auth/signin?error=unexpected_error', request.url))
     }
   } else {
-    console.log('[auth/callback] No code provided in callback')
+    // For magic link flows (no code parameter)
+    console.log('[auth/callback] Magic link flow - checking existing session...')
+    
+    try {
+      const { data: { user }, error } = await supabase.auth.getUser()
+      
+      if (error) {
+        console.error('[auth/callback] Error getting user:', error)
+        // For magic links, redirect to signin page where tokens will be handled
+        return NextResponse.redirect(new URL(`/auth/signin?redirectTo=${encodeURIComponent(redirectTo)}`, request.url))
+      }
+      
+      if (user) {
+        console.log('[auth/callback] User authenticated via magic link:', user.email)
+      } else {
+        console.log('[auth/callback] No user found in session')
+        return NextResponse.redirect(new URL(`/auth/signin?redirectTo=${encodeURIComponent(redirectTo)}`, request.url))
+      }
+    } catch (error) {
+      console.error('[auth/callback] Unexpected error checking session:', error)
+      return NextResponse.redirect(new URL(`/auth/signin?redirectTo=${encodeURIComponent(redirectTo)}`, request.url))
+    }
   }
 
   console.log('[auth/callback] Redirecting to:', redirectTo)

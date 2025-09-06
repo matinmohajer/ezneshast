@@ -28,7 +28,7 @@ export async function middleware(request: NextRequest) {
     // Handle protected routes
     if (isProtectedRoute) {
       if (!user) {
-        // Redirect to sign in if not authenticated
+        // For protected routes, redirect to signin if no user found
         const signInUrl = new URL('/auth/signin', request.url)
         signInUrl.searchParams.set('redirectTo', pathname)
         return NextResponse.redirect(signInUrl)

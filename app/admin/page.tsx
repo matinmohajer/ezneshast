@@ -2,6 +2,7 @@ import { createServerSupabaseClientWithCookies, getServerUser } from '@/lib/supa
 import { isAdminUser } from '@/lib/supabase'
 import { redirect } from 'next/navigation'
 import AdminCreditManager from './components/AdminCreditManager'
+import SignOutButton from '../components/SignOutButton'
 
 export default async function AdminPage() {
   const user = await getServerUser()
@@ -73,14 +74,9 @@ export default async function AdminPage() {
               >
                 Back to Dashboard
               </a>
-              <form action="/api/auth/signout" method="post">
-                <button
-                  type="submit"
-                  className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                >
-                  Sign Out
-                </button>
-              </form>
+              <SignOutButton className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
+                Sign Out
+              </SignOutButton>
             </div>
           </div>
         </div>

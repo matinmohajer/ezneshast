@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 // Types for our database tables
 export interface Database {
@@ -113,8 +113,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-// Client-side Supabase client
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+// Client-side Supabase client with proper SSR cookie handling
+export const supabase = createBrowserClient<Database>(
+  supabaseUrl,
+  supabaseAnonKey
+)
 
 // Server-side Supabase client (for API routes)
 export function createServerSupabaseClient() {
@@ -122,12 +125,7 @@ export function createServerSupabaseClient() {
     throw new Error('SUPABASE_SERVICE_ROLE_KEY is required for server operations')
   }
   
-  return createClient<Database>(supabaseUrl!, supabaseServiceKey!, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  })
+  return createBrowserClient<Database>(supabaseUrl!, supabaseServiceKey!)
 }
 
 // Helper to check if user is admin
