@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
 
 interface SignOutButtonProps {
   className?: string
@@ -11,7 +10,6 @@ interface SignOutButtonProps {
 
 export default function SignOutButton({ className, children }: SignOutButtonProps) {
   const [loading, setLoading] = useState(false)
-  const router = useRouter()
 
   const handleSignOut = async () => {
     setLoading(true)

@@ -19,6 +19,7 @@ export async function createServerSupabaseClientWithCookies() {
               cookieStore.set(name, value, options)
             })
           } catch (error) {
+            console.error('Error setting cookies:', error)
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing
             // user sessions.
@@ -30,7 +31,7 @@ export async function createServerSupabaseClientWithCookies() {
 }
 
 export function createMiddlewareSupabaseClient(request: NextRequest) {
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },

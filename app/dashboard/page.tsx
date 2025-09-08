@@ -83,7 +83,7 @@ export default async function DashboardPage() {
             <div className="p-6">
               {ledgerEntries && ledgerEntries.length > 0 ? (
                 <div className="space-y-4">
-                  {ledgerEntries.map((entry: any) => (
+                  {ledgerEntries.map((entry: { id: string; reason: string; created_at: string; amount: number }) => (
                     <div key={entry.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{entry.reason}</p>
@@ -113,7 +113,7 @@ export default async function DashboardPage() {
             <div className="p-6">
               {jobs && jobs.length > 0 ? (
                 <div className="space-y-4">
-                  {jobs.map((job: any) => (
+                  {jobs.map((job: { id: string; type: string; created_at: string; status: 'completed' | 'failed' | 'processing' | string; cost: number }) => (
                     <div key={job.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                       <div>
                         <p className="text-sm font-medium text-gray-900 capitalize">{job.type}</p>

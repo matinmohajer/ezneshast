@@ -28,15 +28,14 @@ export default function VoiceTranscribePage() {
       setUser(user)
       
       // Get user credits
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: creditsData } = await (supabase as any)
+      const { data: creditsData } = await supabase
         .from('credits')
         .select('balance')
         .eq('user_id', user.id)
         .single()
       
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setCredits((creditsData as any)?.balance || 0)
+      // TODO(types): Replace with precise row type once supabase types are generated
+      setCredits((creditsData as unknown as { balance?: number } | null)?.balance || 0)
     }
     
     getUser()
@@ -134,14 +133,13 @@ export default function VoiceTranscribePage() {
         setError(`Insufficient credits. You have ${data.balance} credits but need ${data.required}. Please contact an administrator to add credits.`);
         // Refresh credits
         if (user) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { data: creditsData } = await (supabase as any)
+          const { data: creditsData } = await supabase
             .from('credits')
             .select('balance')
             .eq('user_id', user.id)
             .single()
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setCredits((creditsData as any)?.balance || 0)
+          // TODO(types): Replace with precise row type once supabase types are generated
+          setCredits((creditsData as unknown as { balance?: number } | null)?.balance || 0)
         }
         throw new Error('Insufficient credits');
       } else if (response.status === 401) {
@@ -157,14 +155,13 @@ export default function VoiceTranscribePage() {
     
     // Refresh credits after successful transcription
     if (user) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: creditsData } = await (supabase as any)
+      const { data: creditsData } = await supabase
         .from('credits')
         .select('balance')
         .eq('user_id', user.id)
         .single()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setCredits((creditsData as any)?.balance || 0)
+      // TODO(types): Replace with precise row type once supabase types are generated
+      setCredits((creditsData as unknown as { balance?: number } | null)?.balance || 0)
     }
     
     // Return the formatted transcript from the API

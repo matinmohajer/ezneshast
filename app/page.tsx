@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 export default function HomePage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string; email: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -22,7 +22,7 @@ export default function HomePage() {
         userEmail: user?.email
       });
       
-      setUser(user);
+      setUser(user ? { id: user.id, email: user.email ?? null } : null);
       setLoading(false);
       
       // Redirect to dashboard if user is authenticated

@@ -3,8 +3,15 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
+type DebugAuthState = {
+  user: { id: string; email: string | null; created_at: string } | null;
+  error: string | null;
+  supabaseUrl: string | undefined;
+  hasAnonKey: boolean;
+} | null
+
 export default function DebugPage() {
-  const [authState, setAuthState] = useState<any>(null)
+  const [authState, setAuthState] = useState<DebugAuthState>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -20,7 +27,7 @@ export default function DebugPage() {
         setAuthState({
           user: user ? {
             id: user.id,
-            email: user.email,
+            email: user.email ?? null,
             created_at: user.created_at
           } : null,
           error: error ? error.message : null,
@@ -32,6 +39,7 @@ export default function DebugPage() {
       } catch (err) {
         console.error('[Debug] Error checking auth:', err)
         setAuthState({
+          user: null,
           error: err instanceof Error ? err.message : 'Unknown error',
           supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
           hasAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

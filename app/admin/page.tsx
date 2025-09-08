@@ -81,7 +81,7 @@ export default async function AdminPage() {
             <div className="p-6">
               {users && users.length > 0 ? (
                 <div className="space-y-4">
-                  {users.map((userCredit: any) => (
+                  {users.map((userCredit: { id: string; user_id: string; balance: number; updated_at: string; user?: { email?: string | null } | null }) => (
                     <div key={userCredit.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                       <div>
                         <p className="text-sm font-medium text-gray-900">
@@ -116,7 +116,7 @@ export default async function AdminPage() {
             <div className="p-6">
               {recentTransactions && recentTransactions.length > 0 ? (
                 <div className="space-y-4">
-                  {recentTransactions.map((transaction: any) => (
+                  {recentTransactions.map((transaction: { id: string; reason: string; created_at: string; amount: number; user?: { email?: string | null } | null }) => (
                     <div key={transaction.id} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                       <div>
                         <p className="text-sm font-medium text-gray-900">{transaction.reason}</p>

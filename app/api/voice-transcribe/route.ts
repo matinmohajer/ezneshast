@@ -148,17 +148,22 @@ export async function POST(request: NextRequest) {
     // Derive duration from provider response (words/audio_events/duration)
     const extractDurationSeconds = (resp: unknown): number => {
       try {
-        const r: any = resp as any;
+        // TODO(types): Replace loose structure with official ElevenLabs response type when available
+        const r = resp as unknown as {
+          words?: Array<{ start?: unknown; end?: unknown }>;
+          audio_events?: Array<{ start?: unknown; end?: unknown }>;
+          duration?: unknown;
+        } | null;
         const starts: number[] = [];
         const ends: number[] = [];
-        if (r && Array.isArray(r.words)) {
-          for (const w of r.words) {
+        if (r && Array.isArray(r?.words)) {
+          for (const w of r.words as Array<{ start?: unknown; end?: unknown }> ) {
             if (Number.isFinite(w?.start)) starts.push(Number(w.start));
             if (Number.isFinite(w?.end)) ends.push(Number(w.end));
           }
         }
-        if (r && Array.isArray(r.audio_events)) {
-          for (const e of r.audio_events) {
+        if (r && Array.isArray(r?.audio_events)) {
+          for (const e of r.audio_events as Array<{ start?: unknown; end?: unknown }> ) {
             if (Number.isFinite(e?.start)) starts.push(Number(e.start));
             if (Number.isFinite(e?.end)) ends.push(Number(e.end));
           }
@@ -166,9 +171,9 @@ export async function POST(request: NextRequest) {
         // Fallback explicit duration if present
         if (
           (starts.length === 0 || ends.length === 0) &&
-          Number.isFinite(r?.duration)
+          Number.isFinite((r as { duration?: unknown } | null)?.duration)
         ) {
-          return Math.max(0, Number(r.duration));
+          return Math.max(0, Number((r as { duration?: unknown }).duration));
         }
         if (starts.length === 0 || ends.length === 0) return 0;
         const minStart = Math.min(...starts);
@@ -181,14 +186,19 @@ export async function POST(request: NextRequest) {
       }
     };
 
-    const respAny: any = transcription as any;
+    // TODO(types): Replace with official ElevenLabs transcription type once available
+    const respObj = transcription as unknown as {
+      words?: TranscriptWord[];
+      speakers?: unknown;
+      audio_events?: unknown;
+    } | string | null;
     if (typeof transcription === "string") {
       // Simple string response
       formattedTranscript = transcription;
-    } else if (respAny?.words && Array.isArray(respAny.words)) {
+    } else if (respObj && typeof respObj === 'object' && Array.isArray((respObj as { words?: unknown }).words)) {
       // Structured response with words
       formattedTranscript = formatTranscriptWithSpeakers(
-        respAny.words as TranscriptWord[]
+        (respObj as { words: TranscriptWord[] }).words
       );
     } else {
       // Fallback for other response types
@@ -247,8 +257,9 @@ export async function POST(request: NextRequest) {
       transcript: formattedTranscript,
       metadata: {
         language: "fa",
-        speakers: respAny?.speakers || [],
-        audio_events: respAny?.audio_events || [],
+        // TODO(types): refine once server response is stabilized
+        speakers: (respObj && typeof respObj === 'object' && 'speakers' in respObj ? (respObj as { speakers?: unknown }).speakers : []) || [],
+        audio_events: (respObj && typeof respObj === 'object' && 'audio_events' in respObj ? (respObj as { audio_events?: unknown }).audio_events : []) || [],
         word_count: formattedTranscript.split(/\s+/).length,
         job_id: chargeResult.job_id,
         duration_seconds: durationSeconds,
