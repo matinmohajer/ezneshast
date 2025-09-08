@@ -19,8 +19,15 @@ function formatTranscriptWithSpeakers(words: TranscriptWord[]): string {
     return "No transcript available";
   }
 
-  console.log("[formatTranscriptWithSpeakers] Processing", words.length, "words");
-  console.log("[formatTranscriptWithSpeakers] First few words:", words.slice(0, 3));
+  console.log(
+    "[formatTranscriptWithSpeakers] Processing",
+    words.length,
+    "words"
+  );
+  console.log(
+    "[formatTranscriptWithSpeakers] First few words:",
+    words.slice(0, 3)
+  );
 
   let formattedTranscript = "";
   let currentSpeaker = "";
@@ -32,23 +39,23 @@ function formatTranscriptWithSpeakers(words: TranscriptWord[]): string {
     if (word.speakerId) {
       uniqueSpeakers.add(word.speakerId);
     }
-    
+
     // Check if speaker changed
     if (word.speakerId && word.speakerId !== currentSpeaker) {
       // If we have accumulated text, add it to the transcript
       if (currentSentence.trim()) {
         formattedTranscript += currentSentence.trim() + "\n\n";
       }
-      
+
       // Start new speaker section
       currentSpeaker = word.speakerId;
       const speakerNumber = currentSpeaker.replace("speaker_", "");
       const speakerLabel = `Speaker ${parseInt(speakerNumber) + 1}`;
-      
+
       formattedTranscript += `${speakerLabel}\n`;
       currentSentence = "";
     }
-    
+
     // Add word to current sentence
     if (word.text) {
       currentSentence += word.text + " ";
@@ -60,10 +67,15 @@ function formatTranscriptWithSpeakers(words: TranscriptWord[]): string {
     formattedTranscript += currentSentence.trim();
   }
 
-  console.log("[formatTranscriptWithSpeakers] Unique speakers found:", uniqueSpeakers.size);
-  console.log("[formatTranscriptWithSpeakers] Formatted transcript preview:", 
-    formattedTranscript.slice(0, 200));
-  
+  console.log(
+    "[formatTranscriptWithSpeakers] Unique speakers found:",
+    uniqueSpeakers.size
+  );
+  console.log(
+    "[formatTranscriptWithSpeakers] Formatted transcript preview:",
+    formattedTranscript.slice(0, 200)
+  );
+
   return formattedTranscript;
 }
 
@@ -90,44 +102,8 @@ export async function POST(request: NextRequest) {
 
     console.log("[voice-transcribe] User authenticated:", user.email);
 
-    // Check credits before processing
+    // We'll compute cost from ElevenLabs timing info, then charge
     const supabase = createServerSupabaseClient();
-    const transcriptionCost = 10; // Cost in credits for transcription
-    const idempotencyKey = `transcription_${user.id}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-    console.log("[voice-transcribe] Checking credits for user:", user.id);
-
-    // Use the new API-friendly function
-    const { data: creditResult, error: creditError } = await supabase.rpc('api_consume_credits', {
-      p_user_id: user.id,
-      p_cost: transcriptionCost,
-      p_key: idempotencyKey,
-      p_reason: 'Voice transcription',
-      p_ref: null
-    });
-
-    if (creditError) {
-      console.error("[voice-transcribe] Credit check error:", creditError);
-      return NextResponse.json(
-        { error: "Credit system error", details: creditError.message },
-        { status: 500 }
-      );
-    }
-
-    if (!creditResult.success) {
-      console.log("[voice-transcribe] Insufficient credits:", creditResult.message);
-      return NextResponse.json(
-        { 
-          error: "Insufficient credits",
-          message: creditResult.message,
-          required: transcriptionCost,
-          balance: creditResult.new_balance
-        },
-        { status: 402 }
-      );
-    }
-
-    console.log("[voice-transcribe] Credits consumed successfully. New balance:", creditResult.new_balance);
 
     const formData = await request.formData();
     const audioFile = formData.get("audio") as Blob | null;
@@ -150,9 +126,6 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.ELEVENLABS_API_KEY,
     });
 
-    // Convert Blob to Buffer for ElevenLabs API
-    // const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
-
     console.log("[voice-transcribe] Sending to ElevenLabs Scribe v1...");
 
     // Send directly to ElevenLabs Scribe v1
@@ -165,17 +138,58 @@ export async function POST(request: NextRequest) {
     });
 
     console.log("[voice-transcribe] ElevenLabs response received");
-    console.log("[voice-transcribe] Response structure:", JSON.stringify(transcription, null, 2));
+    console.log(
+      "[voice-transcribe] Response structure:",
+      JSON.stringify(transcription, null, 2)
+    );
 
-    // Process the transcription response for speaker diarization
+    // Process the transcription response and compute duration-based cost
     let formattedTranscript: string;
-    
+    // Derive duration from provider response (words/audio_events/duration)
+    const extractDurationSeconds = (resp: unknown): number => {
+      try {
+        const r: any = resp as any;
+        const starts: number[] = [];
+        const ends: number[] = [];
+        if (r && Array.isArray(r.words)) {
+          for (const w of r.words) {
+            if (Number.isFinite(w?.start)) starts.push(Number(w.start));
+            if (Number.isFinite(w?.end)) ends.push(Number(w.end));
+          }
+        }
+        if (r && Array.isArray(r.audio_events)) {
+          for (const e of r.audio_events) {
+            if (Number.isFinite(e?.start)) starts.push(Number(e.start));
+            if (Number.isFinite(e?.end)) ends.push(Number(e.end));
+          }
+        }
+        // Fallback explicit duration if present
+        if (
+          (starts.length === 0 || ends.length === 0) &&
+          Number.isFinite(r?.duration)
+        ) {
+          return Math.max(0, Number(r.duration));
+        }
+        if (starts.length === 0 || ends.length === 0) return 0;
+        const minStart = Math.min(...starts);
+        const maxEnd = Math.max(...ends);
+        const dur = Math.max(0, maxEnd - minStart);
+        // Clamp to a sensible max (e.g., 2 hours)
+        return Math.min(dur, 2 * 3600);
+      } catch {
+        return 0;
+      }
+    };
+
+    const respAny: any = transcription as any;
     if (typeof transcription === "string") {
       // Simple string response
       formattedTranscript = transcription;
-    } else if (transcription.words && Array.isArray(transcription.words)) {
+    } else if (respAny?.words && Array.isArray(respAny.words)) {
       // Structured response with words
-      formattedTranscript = formatTranscriptWithSpeakers(transcription.words);
+      formattedTranscript = formatTranscriptWithSpeakers(
+        respAny.words as TranscriptWord[]
+      );
     } else {
       // Fallback for other response types
       formattedTranscript = JSON.stringify(transcription, null, 2);
@@ -183,17 +197,64 @@ export async function POST(request: NextRequest) {
 
     console.log("[voice-transcribe] Transcription completed successfully");
 
+    // Compute cost from duration and charge now
+    const durationSeconds = extractDurationSeconds(transcription as unknown);
+    const hourlyRate = 10; // credits per hour
+    const costCredits = Math.max(
+      1,
+      Math.ceil((durationSeconds / 3600) * hourlyRate)
+    );
+
+    const idempotencyKey = `transcription_${
+      user.id
+    }_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const { data: chargeResult, error: chargeError } = await supabase.rpc(
+      "api_consume_credits",
+      {
+        p_user_id: user.id,
+        p_cost: costCredits,
+        p_key: idempotencyKey,
+        p_reason: "Voice transcription (duration-based)",
+        p_ref: null,
+      }
+    );
+
+    if (chargeError) {
+      console.error("[voice-transcribe] Credit charge error:", chargeError);
+      return NextResponse.json(
+        { error: "Credit system error", details: chargeError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!chargeResult.success) {
+      console.log(
+        "[voice-transcribe] Insufficient credits after transcription:",
+        chargeResult.message
+      );
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          message: chargeResult.message,
+          required: costCredits,
+          balance: chargeResult.new_balance,
+        },
+        { status: 402 }
+      );
+    }
+
     return NextResponse.json({
       transcript: formattedTranscript,
       metadata: {
         language: "fa",
-        speakers: transcription.speakers || [],
-        audio_events: transcription.audio_events || [],
+        speakers: respAny?.speakers || [],
+        audio_events: respAny?.audio_events || [],
         word_count: formattedTranscript.split(/\s+/).length,
-        job_id: creditResult.job_id
-      }
+        job_id: chargeResult.job_id,
+        duration_seconds: durationSeconds,
+        computed_cost: costCredits,
+      },
     });
-
   } catch (err: unknown) {
     const message =
       err instanceof Error ? err.message : "Internal server error";
