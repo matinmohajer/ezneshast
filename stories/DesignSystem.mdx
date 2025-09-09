@@ -1,0 +1,40 @@
+export default { title: "Foundations/Design System" };
+
+# Ezneshast Design System
+
+The Ezneshast UI is built with Tailwind 4 design tokens and cohesive brand foundations.
+
+## Colors
+
+- Primary: `--brand-600` → `rgb(var(--color-primary-600))`
+- Foreground/Background: `--foreground` / `--background`
+- Semantic: `--success`, `--warning`, `--danger`, `--muted`
+
+```css
+:root {
+  --brand-500: #6366f1;
+  --brand-600: #4f46e5;
+}
+```
+
+## Radii
+
+- `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, `--radius-2xl`
+
+## Shadows
+
+- `--shadow-sm`, `--shadow-md`, `--shadow-lg`
+
+## Typography
+
+- Sans: Geist Sans (`--font-geist-sans`)
+- Mono: Geist Mono (`--font-geist-mono`)
+
+## Components
+
+- Button, Card, Tag, Skeleton
+- Media: AudioPlayer
+- Transcript: TranscriptLine
+- Navigation Topbar
+
+Use the stories in this library to explore props and states. All components follow RTL-friendly layout and dark mode styles.

@@ -10,6 +10,7 @@
 ## ✨ Features
 
 ### 🎯 Core Features
+
 - **High-Quality Transcription**: Powered by ElevenLabs Scribe v1 with speaker diarization
 - **Multi-Language Support**: Persian, English, Arabic, and 10+ other languages
 - **Meeting Minutes Generation**: AI-powered summarization with structured output
@@ -17,6 +18,7 @@
 - **Credit-Based System**: Flexible pricing with admin-controlled credit management
 
 ### 🔧 Technical Features
+
 - **Modern Architecture**: Next.js 15 with App Router and TypeScript
 - **Secure Authentication**: Supabase Auth with magic links and OAuth
 - **Database Security**: Row Level Security (RLS) with audit logging
@@ -26,6 +28,7 @@
 - **Admin Panel**: Complete admin interface for user and credit management
 
 ### 🎨 User Experience
+
 - **Responsive Design**: Mobile-first design with Tailwind CSS
 - **Real-time Updates**: Live progress tracking and status updates
 - **Intuitive Interface**: Clean, modern UI with Persian RTL support
@@ -45,43 +48,49 @@
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/ezneshast/ezneshast.git
    cd ezneshast
    ```
 
 2. **Install dependencies**
+
    ```bash
    npm install
    ```
 
 3. **Set up environment variables**
+
    ```bash
    cp env.example .env.local
    ```
-   
+
    Edit `.env.local` with your configuration:
+
    ```env
    # Supabase Configuration
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-   
+
    # API Keys
    ELEVENLABS_API_KEY=your_elevenlabs_api_key
    GROQ_API_KEY=your_groq_api_key
-   
+
    # Admin Configuration
    ADMIN_EMAILS=admin@yourcompany.com,superadmin@yourcompany.com
    ```
 
 4. **Set up the database**
+
    ```bash
    # Run the enhanced schema
    psql -h your-db-host -U postgres -d postgres -f supabase-schema-enhanced.sql
    ```
 
 5. **Start the development server**
+
    ```bash
    npm run dev
    ```
@@ -128,15 +137,15 @@ ezneshast/
 
 ### Environment Variables
 
-| Variable | Description | Required | Default |
-|----------|-------------|----------|---------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | ✅ | - |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key | ✅ | - |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | ✅ | - |
-| `ELEVENLABS_API_KEY` | ElevenLabs API key | ✅ | - |
-| `GROQ_API_KEY` | Groq API key | ❌ | - |
-| `ADMIN_EMAILS` | Comma-separated admin emails | ✅ | - |
-| `NEXT_PUBLIC_SITE_URL` | Site URL for redirects | ❌ | http://localhost:3000 |
+| Variable                        | Description                  | Required | Default               |
+| ------------------------------- | ---------------------------- | -------- | --------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`      | Supabase project URL         | ✅       | -                     |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key       | ✅       | -                     |
+| `SUPABASE_SERVICE_ROLE_KEY`     | Supabase service role key    | ✅       | -                     |
+| `ELEVENLABS_API_KEY`            | ElevenLabs API key           | ✅       | -                     |
+| `GROQ_API_KEY`                  | Groq API key                 | ❌       | -                     |
+| `ADMIN_EMAILS`                  | Comma-separated admin emails | ✅       | -                     |
+| `NEXT_PUBLIC_SITE_URL`          | Site URL for redirects       | ❌       | http://localhost:3000 |
 
 ### Database Configuration
 
@@ -180,18 +189,21 @@ node scripts/charge-credits.js
 ## 🔒 Security Features
 
 ### Authentication & Authorization
+
 - **Magic Link Authentication**: Secure, passwordless login
 - **OAuth Integration**: Google, GitHub, and other providers
 - **Session Management**: Secure cookie-based sessions
 - **Admin Role Management**: Email-based admin access control
 
 ### Data Protection
+
 - **Row Level Security**: Database-level access control
 - **Input Validation**: Comprehensive input sanitization
 - **Rate Limiting**: Protection against abuse and DDoS
 - **Audit Logging**: Complete audit trail for compliance
 
 ### API Security
+
 - **CORS Configuration**: Proper cross-origin resource sharing
 - **Security Headers**: XSS, CSRF, and clickjacking protection
 - **Request Validation**: Type-safe API endpoints
@@ -200,12 +212,14 @@ node scripts/charge-credits.js
 ## 📊 Monitoring & Analytics
 
 ### Built-in Monitoring
+
 - **Request Logging**: Comprehensive API request logging
 - **Error Tracking**: Detailed error reporting and stack traces
 - **Performance Metrics**: Processing time and resource usage tracking
 - **User Analytics**: Usage patterns and feature adoption
 
 ### Health Checks
+
 - **API Health**: `/api/health` endpoint for monitoring
 - **Database Health**: Connection and query performance monitoring
 - **External Services**: ElevenLabs and Groq API status monitoring
@@ -215,11 +229,13 @@ node scripts/charge-credits.js
 ### Production Deployment
 
 1. **Build the application**
+
    ```bash
    npm run build
    ```
 
 2. **Set up production environment**
+
    - Configure production environment variables
    - Set up Supabase production project
    - Configure CDN and file storage
@@ -270,6 +286,7 @@ npm run lint
 ## 📈 Performance Optimization
 
 ### Built-in Optimizations
+
 - **Code Splitting**: Automatic route-based code splitting
 - **Image Optimization**: Next.js Image component with WebP/AVIF
 - **Bundle Analysis**: Built-in bundle analyzer
@@ -277,6 +294,7 @@ npm run lint
 - **Compression**: Gzip/Brotli compression for all responses
 
 ### Database Optimization
+
 - **Connection Pooling**: Efficient database connection management
 - **Query Optimization**: Indexed queries and efficient data access
 - **Caching Layer**: Redis caching for user data and system settings
@@ -337,11 +355,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 #### Common Issues
 
 1. **Authentication Errors**
+
    - Check Supabase configuration
    - Verify redirect URLs in Supabase dashboard
    - Ensure admin emails are properly configured
 
 2. **API Errors**
+
    - Verify API keys are correct and active
    - Check rate limits and quotas
    - Review error logs for detailed information
@@ -378,3 +398,56 @@ Enable debug mode by setting `DEBUG=true` in your environment variables for deta
 **Made with ❤️ by the EzneShast Team**
 
 For more information, visit [ezneshast.com](https://ezneshast.com)
+
+## Frontend Audit (Phase 1)
+
+This section summarizes a quick audit of the current frontend to guide Phase 1 improvements. Scope: UI/UX, accessibility, performance, and code quality. Backend APIs and contracts remain untouched.
+
+### Top 10 issues and opportunities
+
+1. Navigation and entry points
+   - Landing redirects authenticated users to `dashboard`, but unauthenticated flow is minimal. Consider clearer onboarding and links to key features.
+2. Meeting workflows (minutes/transcript)
+   - `app/voice-meeting-minutes/page.tsx` and `app/voice-transcribe/page.tsx` have basic flows but lack audio–transcript synchronization, speaker attribution, and quick jump actions.
+3. Skeleton/loading states
+   - Spinners are used; replace with skeletons for perceived performance (especially minutes/transcript areas).
+4. Design system tokens
+   - `app/globals.css` defines CSS variables and Tailwind v4 theme tokens, but there’s no small component library to enforce consistency.
+5. Visual hierarchy and spacing
+   - Utility classes are inconsistent across pages; introduce consistent spacing scale, card elevation, and radius usage.
+6. Accessibility (WCAG basics)
+   - Buttons lack explicit accessible names in some places; ensure `aria-label`, focus outlines, and keyboard shortcuts for audio controls.
+7. RTL/LTR handling
+   - Minutes page uses `dir="rtl"` thoughtfully; ensure mirrored layout, table semantics, and markdown headings are consistently styled (already partially handled in `globals.css`).
+8. Error handling and empty states
+   - Credit errors are surfaced, but empty states/onboarding for first-time users are missing.
+9. Testing and Storybook
+   - Storybook dependencies exist; initial stories and a11y checks are not yet present. No unit tests for components/hooks yet.
+10. Performance and code quality
+
+- Large components render markdown and blocks directly on pages. Extract into components, lazy-load heavy parts (e.g., waveform later), and add TypeScript strictness for props.
+
+### Prioritized recommendations (Phase 1)
+
+- Implement a Meeting Detail UI with:
+  - Audio player with keyboard shortcuts (space/←/→) and prepared slot for waveform (lazy import).
+  - Transcript list with timestamp chips, clickable to seek, and basic highlight of the current segment.
+  - Actions panel (copy/export markdown, download, quick filters/search input).
+  - Skeletons for audio/transcript and minutes while processing.
+- Establish a minimal component library (atoms → molecules → organisms):
+  - Button, Input, Card, Tag/Badge, Modal, Table, List, Skeleton, AudioPlayer, TranscriptLine.
+  - Add Storybook with a11y addon, initial stories for these components.
+- Add hooks: `useAudio`, `useTranscriptSearch`, `useDebounce`, `useSupabaseAuth`.
+- Accessibility: ensure focus styles, roles/labels on controls, and color contrast.
+- Testing: set up unit tests for hooks/components (Vitest + RTL), add one E2E smoke path with Playwright later.
+
+### Non-goals / constraints
+
+- No backend contract changes. All API calls remain as-is.
+- Keep performance stable: prefer lazy-loading and memoization where needed.
+
+### Next steps
+
+- PR 1: Audit (this section) + scaffolding for components and Storybook.
+- PR 2: Meeting Detail with audio–transcript sync and skeletons.
+- PR 3: Transcript editor polish and export modal.
