@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import Groq from "groq-sdk";
 import { MEETING_PROCESSOR_CONFIG } from "@/lib/config";
 import {
@@ -11,6 +12,49 @@ import {
   getChunkingRecommendations,
   TranscriptChunk,
 } from "@/lib/transcript-chunker";
+
+// Types for ElevenLabs response (align with voice-transcribe route)
+interface TranscriptWord {
+  text: string;
+  start?: number;
+  end?: number;
+  type?: string;
+  speakerId?: string;
+  logprob?: number;
+}
+
+// Function to format transcript with speaker labels (copied from voice-transcribe)
+function formatTranscriptWithSpeakers(words: TranscriptWord[]): string {
+  if (!words || words.length === 0) {
+    return "No transcript available";
+  }
+
+  let formattedTranscript = "";
+  let currentSpeaker = "";
+  let currentSentence = "";
+
+  for (const word of words) {
+    if (word.speakerId && word.speakerId !== currentSpeaker) {
+      if (currentSentence.trim()) {
+        formattedTranscript += currentSentence.trim() + "\n\n";
+      }
+      currentSpeaker = word.speakerId;
+      const speakerNumber = currentSpeaker.replace("speaker_", "");
+      const speakerLabel = `Speaker ${parseInt(speakerNumber) + 1}`;
+      formattedTranscript += `${speakerLabel}\n`;
+      currentSentence = "";
+    }
+    if (word.text) {
+      currentSentence += word.text + " ";
+    }
+  }
+
+  if (currentSentence.trim()) {
+    formattedTranscript += currentSentence.trim();
+  }
+
+  return formattedTranscript;
+}
 
 /**
  * Create a fallback summary when LLM summarization fails
@@ -58,7 +102,14 @@ function createFallbackSummary(
 
 export async function POST(request: NextRequest) {
   try {
-    // Check for required API key
+    // Check for required API keys
+    if (!process.env.ELEVENLABS_API_KEY) {
+      return NextResponse.json(
+        { error: "ELEVENLABS_API_KEY missing" },
+        { status: 500 }
+      );
+    }
+
     if (!process.env.GROQ_API_KEY) {
       return NextResponse.json(
         { error: "GROQ_API_KEY missing" },
@@ -69,13 +120,12 @@ export async function POST(request: NextRequest) {
     console.log("[voice-meeting-minutes] Received POST request");
 
     const formData = await request.formData();
-    const transcriptText = formData.get("transcript") as string | null;
+    const audioFile = formData.get("audio") as Blob | null;
     // Optional enhancements: topics and template
     const topicsRaw = formData.get("topics");
     const templateRaw = formData.get("template");
     let topics: string[] | undefined;
     let template: string | undefined;
-
     if (typeof topicsRaw === "string") {
       try {
         const parsed = JSON.parse(topicsRaw);
@@ -98,20 +148,78 @@ export async function POST(request: NextRequest) {
       template = templateRaw.trim() || undefined;
     }
 
-    if (!transcriptText) {
-      console.log("[voice-meeting-minutes] No transcript in formData");
+    if (!audioFile) {
+      console.log("[voice-meeting-minutes] No audio file in formData");
       return NextResponse.json(
-        { error: "`transcript` field required" },
+        { error: "`audio` field required" },
         { status: 400 }
       );
     }
 
-    console.log("[voice-meeting-minutes] Transcript received:", {
+    console.log("[voice-meeting-minutes] Audio file received:", {
+      size: audioFile.size,
+      type: audioFile.type,
+    });
+
+    // Step 1: Transcribe with ElevenLabs Scribe v1
+    console.log(
+      "[voice-meeting-minutes] Starting transcription with ElevenLabs..."
+    );
+
+    const elevenlabs = new ElevenLabsClient({
+      apiKey: process.env.ELEVENLABS_API_KEY,
+    });
+
+    const transcription = await elevenlabs.speechToText.convert({
+      file: audioFile,
+      modelId: "scribe_v1",
+      tagAudioEvents: true,
+      languageCode: "fa", // Persian
+      diarize: true,
+    });
+
+    console.log("[voice-meeting-minutes] ElevenLabs transcription completed");
+
+    // Handle different response types from ElevenLabs
+    let transcriptText: string;
+    // When diarization words are available, mirror voice-transcribe speaker formatting
+    const respObj = transcription as unknown as
+      | {
+          words?: TranscriptWord[];
+          text?: string;
+          transcription?: string;
+          segments?: Array<{ text?: string }>;
+        }
+      | string
+      | null;
+    if (typeof respObj === "string") {
+      transcriptText = respObj;
+    } else if (respObj && typeof respObj === "object") {
+      if (Array.isArray(respObj.words) && respObj.words.length > 0) {
+        transcriptText = formatTranscriptWithSpeakers(respObj.words);
+      } else if (typeof respObj.text === "string") {
+        transcriptText = respObj.text;
+      } else if (typeof respObj.transcription === "string") {
+        transcriptText = respObj.transcription;
+      } else if (Array.isArray(respObj.segments)) {
+        transcriptText = respObj.segments
+          .map((segment) => segment.text || "")
+          .join(" ");
+      } else {
+        transcriptText = JSON.stringify(respObj);
+      }
+    } else {
+      transcriptText = "No transcription result";
+    }
+
+    console.log("[voice-meeting-minutes] Transcript extracted:", {
       length: transcriptText.length,
       preview: transcriptText.slice(0, 100),
     });
 
-    // Step 1: Summarize with Groq
+    // Continue with summarization after transcription
+
+    // Step 2: Summarize with Groq
     console.log("[voice-meeting-minutes] Starting summarization with Groq...");
 
     const groq = new Groq({
@@ -134,27 +242,30 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = `شما یک دستیار هستید که باید از متن پیاده‌سازی شده یک جلسه کاری (به زبان فارسی) صورتجلسه رسمی و بی‌طرف تهیه کنید.
 
-راهنما:
-- متن شامل گوینده‌های مختلف (Speaker X یا نام افراد) است.  
-- هر تصمیم یا وظیفه را به گوینده یا شخص مربوطه نسبت بده. اگر فقط شماره گوینده موجود است، همان را ذکر کن.  
-- مباحث نامرتبط، شوخی یا تکراری را حذف کن.  
-- خروجی باید کوتاه، شفاف و ساختاریافته باشد.  
+متن پیاده‌سازی ممکن است شامل شوخی، سکوت، صحبت‌های بی‌ربط یا تکراری باشد. 
+لطفاً فقط بخش‌های مرتبط با مباحث کاری و اسکرام را استخراج کنید.
+
+وظایف شما:
+1. خلاصه‌سازی مباحث مهم جلسه به زبان فارسی رسمی.
+2. حذف کامل هرگونه نظر شخصی، شوخی، یا محتوای نامرتبط.
+3. دسته‌بندی خروجی در قالب زیر:
 
 ### 📌 صورتجلسه
-- **تاریخ جلسه:** [اگر ذکر شد بنویسید]  
-- **نوع جلسه:** [برنامه‌ریزی / گرومینگ / استندآپ / سایر]  
+- **تاریخ جلسه:** [اگر ذکر شد بنویسید، در غیر اینصورت خالی بگذارید]  
+- **نوع جلسه:** برنامه‌ریزی / گرومینگ / استندآپ / سایر (در صورت تشخیص)  
 
 #### ✅ تصمیمات گرفته‌شده
-- [تصمیم ۱] (گوینده: …)  
-- [تصمیم ۲] (گوینده: …)  
+[تمام تصمیم‌های قطعی که تیم به آن رسید]
 
 #### 📝 وظایف و اقدام‌ها
-- [شرح کار] — مسئول: [نام/گوینده] — زمان‌بندی: [اگر ذکر شد]  
+[کارهای مشخص، شامل:  
+- شرح کار  
+- مسئول (در صورت ذکر نام)  
+- زمان‌بندی یا ضرب‌العجل (اگر گفته شد)  
+]
 
 #### ❓ موضوعات باز / نیازمند پیگیری
-- [موضوع ۱]  
-- [موضوع ۲]  
-
+[موضوعاتی که نتیجه‌گیری نشد و باید در جلسات بعدی بررسی شود]
 
 ---
 
@@ -352,47 +463,7 @@ ${chunk.content}`;
 
         // Merge all chunk summaries
         console.log("[voice-meeting-minutes] Merging chunk summaries...");
-
-        const mergePrompt = `
-شما چند خلاصه از بخش‌های مختلف یک جلسه طولانی دریافت می‌کنید.
-لطفاً آن‌ها را به دقت بررسی کرده و یک صورتجلسه نهایی، کامل، بدون تکرار و ساختاریافته تهیه کنید.
-
-راهنما:
-- تمام تصمیم‌ها، وظایف و موضوعات باز را از همه بخش‌ها در یک ساختار واحد جمع‌آوری کن.
-- تکرارها را حذف کن و نتایج مشابه را ادغام کن.
-- خروجی باید همان قالب صورتجلسه استاندارد را داشته باشد (📌 صورتجلسه → تصمیمات → وظایف → موضوعات باز).
-- از نوشتن متن‌هایی مثل "این خلاصه از X بخش ادغام شده است" خودداری کن.
-`;
-
-        try {
-          const mergeCompletion = await groq.chat.completions.create({
-            messages: [
-              { role: "system", content: mergePrompt },
-              { role: "user", content: chunkSummaries.join("\n\n---\n\n") },
-            ],
-            model: MEETING_PROCESSOR_CONFIG.summarization.model,
-            temperature: MEETING_PROCESSOR_CONFIG.summarization.temperature,
-            max_completion_tokens:
-              MEETING_PROCESSOR_CONFIG.summarization.maxCompletionTokens,
-            top_p: MEETING_PROCESSOR_CONFIG.summarization.topP,
-          });
-
-          meetingMinutes =
-            mergeCompletion.choices[0]?.message?.content ||
-            "خلاصه‌ای تولید نشد";
-          console.log(
-            `[voice-meeting-minutes] Final merged summary length: ${meetingMinutes.length} characters`
-          );
-        } catch (mergeError) {
-          console.error(
-            "[voice-meeting-minutes] Final merge failed:",
-            mergeError
-          );
-          // fallback to naive merge
-          meetingMinutes = mergeChunkSummaries(chunkSummaries, "fa");
-        }
-
-        // meetingMinutes = mergeChunkSummaries(chunkSummaries, "fa");
+        meetingMinutes = mergeChunkSummaries(chunkSummaries, "fa");
         console.log(
           `[voice-meeting-minutes] Final merged summary length: ${meetingMinutes.length} characters`
         );
@@ -429,19 +500,19 @@ ${chunk.content}`;
             "[voice-meeting-minutes] Truncating transcript to fit token limits"
           );
           const maxTokensForTranscript = 6000; // Leave room for system prompt
-          const truncatedTranscript = truncateForTokenLimit(
+          transcriptText = truncateForTokenLimit(
             transcriptText,
             maxTokensForTranscript,
             "fa"
           );
           console.log(
-            `[voice-meeting-minutes] Transcript truncated to ${truncatedTranscript.length} characters`
+            `[voice-meeting-minutes] Transcript truncated to ${transcriptText.length} characters`
           );
 
           // Recreate user prompt with truncated transcript
           const truncatedUserPrompt = `لطفاً رونویسی زیر را به صورت خلاصه جلسه حرفه‌ای ارائه دهید:
 
-${truncatedTranscript}`;
+${transcriptText}`;
 
           // Recheck token limits with OSS model
           const newTokenCheck = checkTokenLimits(
@@ -554,8 +625,10 @@ ${truncatedTranscript}`;
     });
 
     return NextResponse.json({
+      transcript: transcriptText,
       meetingMinutes: meetingMinutes,
       processing: {
+        transcriptReady: true,
         meetingMinutesReady: true,
       },
       preferences: {
@@ -568,6 +641,7 @@ ${truncatedTranscript}`;
         model: model, // Use the actual model that was used
       },
       model: {
+        transcription: "scribe_v1",
         summarization: model, // Use the actual model that was used
       },
       language: "fa",

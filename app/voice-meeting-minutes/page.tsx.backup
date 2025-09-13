@@ -1,8 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useTransition, useEffect } from "react";
-import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
+import React, { useState, useRef, useTransition } from "react";
 import dynamic from "next/dynamic";
 import "@toast-ui/editor/dist/toastui-editor.css";
 const ToastEditor = dynamic(
@@ -30,10 +28,6 @@ interface ProcessingResult {
 export default function VoiceMeetingMinutesPage() {
   /* ─────────── UI & recording state ─────────── */
   const [recording, setRecording] = useState(false);
-  const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
-  const [credits, setCredits] = useState<number>(0);
-  const [error, setError] = useState<string | null>(null);
-  const router = useRouter();
   const [audioURL, setAudioURL] = useState<string | null>(null);
   const [result, setResult] = useState<ProcessingResult | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -49,33 +43,6 @@ export default function VoiceMeetingMinutesPage() {
   const [editableTranscript, setEditableTranscript] = useState("");
   const pdfRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef(null);
-
-  /* ─────────── authentication & credits ─────────── */
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/auth/signin?redirectTo=/voice-meeting-minutes");
-        return;
-      }
-      setUser(user);
-
-      // Get user credits
-      const { data: creditsData } = await supabase
-        .from("credits")
-        .select("balance")
-        .eq("user_id", user.id)
-        .single();
-
-      setCredits(
-        (creditsData as unknown as { balance?: number } | null)?.balance || 0
-      );
-    };
-
-    getUser();
-  }, [router]);
 
 
   /* ─────────── handlers ─────────── */
@@ -162,84 +129,8 @@ export default function VoiceMeetingMinutesPage() {
   ): Promise<ProcessingResult> => {
     const startTime = Date.now();
 
-    // Step 1: Call voice-transcribe API to get diarized transcript
-    console.log("[processVoiceToMeetingMinutes] Step 1: Getting transcript...");
-    
-    const transcribeFormData = new FormData();
-    transcribeFormData.append("audio", audioBlob);
-
-    const transcribeResponse = await fetch("/api/voice-transcribe", {
-      method: "POST",
-      body: transcribeFormData,
-    });
-
-    if (!transcribeResponse.ok) {
-      const errorData = await transcribeResponse.json();
-      if (transcribeResponse.status === 402) {
-        // Insufficient credits
-        setError(
-          `اعتبار ناکافی. شما ${errorData.balance} اعتبار دارید اما به ${errorData.required} نیاز دارید. لطفاً با مدیر سیستم تماس بگیرید.`
-        );
-        // Refresh credits
-        if (user) {
-          const { data: creditsData } = await supabase
-            .from("credits")
-            .select("balance")
-            .eq("user_id", user.id)
-            .single();
-          setCredits(
-            (creditsData as unknown as { balance?: number } | null)?.balance || 0
-          );
-        }
-        throw new Error("Insufficient credits");
-      } else if (transcribeResponse.status === 401) {
-        // Not authenticated
-        router.push("/auth/signin?redirectTo=/voice-meeting-minutes");
-        throw new Error("Authentication required");
-      } else {
-        throw new Error(errorData.error || "Transcription failed");
-      }
-    }
-
-    const transcribeData = await transcribeResponse.json();
-    const transcript = transcribeData.transcript;
-
-    // Refresh credits after successful transcription
-    if (user) {
-      const { data: creditsData } = await supabase
-        .from("credits")
-        .select("balance")
-        .eq("user_id", user.id)
-        .single();
-      setCredits(
-        (creditsData as unknown as { balance?: number } | null)?.balance || 0
-      );
-    }
-
-    if (!transcript) {
-      throw new Error("No transcript received from transcription service");
-    }
-
-    console.log("[processVoiceToMeetingMinutes] Step 1 completed. Transcript length:", transcript.length);
-
-    // Update result state to show transcript is ready
-    setResult({
-      transcript: transcript,
-      meetingMinutes: "",
-      processingTime: Date.now() - startTime,
-      processing: {
-        transcriptReady: true,
-        meetingMinutesReady: false,
-      },
-    });
-    setEditableTranscript(transcript);
-
-    // Step 2: Call voice-meeting-minutes API with transcript to get meeting minutes
-    console.log("[processVoiceToMeetingMinutes] Step 2: Creating meeting minutes...");
-    
-    const minutesFormData = new FormData();
-    minutesFormData.append("transcript", transcript);
-    
+    const formData = new FormData();
+    formData.append("audio", audioBlob);
     // Attach optional preferences
     if (topicsText.trim()) {
       const topics = topicsText
@@ -247,36 +138,31 @@ export default function VoiceMeetingMinutesPage() {
         .map((s) => s.trim())
         .filter(Boolean);
       if (topics.length > 0) {
-        minutesFormData.append("topics", JSON.stringify(topics));
+        formData.append("topics", JSON.stringify(topics));
       }
     }
     if (templateText.trim()) {
-      minutesFormData.append("template", templateText.trim());
+      formData.append("template", templateText.trim());
     }
 
-    const minutesResponse = await fetch("/api/voice-meeting-minutes", {
+    const response = await fetch("/api/voice-meeting-minutes", {
       method: "POST",
-      body: minutesFormData,
+      body: formData,
     });
 
-    if (!minutesResponse.ok) {
-      const errorData = await minutesResponse.json();
-      throw new Error(errorData.error || "Meeting minutes generation failed");
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || "Processing failed");
     }
 
-    const minutesData = await minutesResponse.json();
+    const data = await response.json();
     const processingTime = Date.now() - startTime;
 
-    console.log("[processVoiceToMeetingMinutes] Step 2 completed. Both transcript and meeting minutes ready.");
-
     return {
-      transcript: transcript,
-      meetingMinutes: minutesData.meetingMinutes,
+      transcript: data.transcript,
+      meetingMinutes: data.meetingMinutes,
       processingTime,
-      processing: {
-        transcriptReady: true,
-        meetingMinutesReady: true,
-      },
+      processing: data.processing,
     };
   };
 
@@ -348,15 +234,6 @@ export default function VoiceMeetingMinutesPage() {
   };
 
   /* ─────────── UI ─────────── */
-  if (!user) {
-    return (
-      <main className="flex min-h-screen flex-col items-center justify-center p-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-        <p className="text-gray-500 mt-4">Loading...</p>
-      </main>
-    );
-  }
-
   return (
     <main
       className="flex min-h-screen flex-col items-center justify-start p-4 space-y-6 pt-24"
@@ -369,60 +246,7 @@ export default function VoiceMeetingMinutesPage() {
         <p className="text-gray-600 dark:text-gray-300">
           ضبط صدا → رونویسی → خلاصه‌سازی توسط Ezneshast
         </p>
-        <div className="flex items-center justify-center gap-3 mt-4">
-          <div className="bg-primary-50/70 dark:bg-primary-500/10 px-4 py-2 rounded-xl border border-primary-100 dark:border-primary-500/20 shadow-sm">
-            <span className="text-sm text-gray-600 dark:text-gray-300">
-              اعتبار:{" "}
-            </span>
-            <span className="font-semibold text-primary-700 dark:text-primary-300">
-              {credits}
-            </span>
-          </div>
-        </div>
       </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="w-full max-w-md bg-red-50 border border-red-200 rounded-xl p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg
-                className="h-5 w-5 text-red-400"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-            <div className="ml-auto pl-3">
-              <button
-                onClick={() => setError(null)}
-                className="text-red-400 hover:text-red-600"
-              >
-                <span className="sr-only">Dismiss</span>
-                <svg
-                  className="h-5 w-5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="flex flex-col items-center space-y-4">
         <button

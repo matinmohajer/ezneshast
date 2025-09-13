@@ -14,7 +14,7 @@ export const MEETING_PROCESSOR_CONFIG = {
   summarization: {
     model: "openai/gpt-oss-120b",
     temperature: 0.1,
-    maxCompletionTokens: 38101,
+    maxCompletionTokens: 65530,
     topP: 1,
     reasoningEffort: "high" as const,
     systemPrompt:
