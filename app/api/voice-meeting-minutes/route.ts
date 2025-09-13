@@ -5,7 +5,6 @@ import { MEETING_PROCESSOR_CONFIG } from "@/lib/config";
 import {
   checkTokenLimits,
   truncateForTokenLimit,
-  getRecommendedModel,
 } from "@/lib/token-management";
 import {
   chunkTranscript,
@@ -13,6 +12,49 @@ import {
   getChunkingRecommendations,
   TranscriptChunk,
 } from "@/lib/transcript-chunker";
+
+// Types for ElevenLabs response (align with voice-transcribe route)
+interface TranscriptWord {
+  text: string;
+  start?: number;
+  end?: number;
+  type?: string;
+  speakerId?: string;
+  logprob?: number;
+}
+
+// Function to format transcript with speaker labels (copied from voice-transcribe)
+function formatTranscriptWithSpeakers(words: TranscriptWord[]): string {
+  if (!words || words.length === 0) {
+    return "No transcript available";
+  }
+
+  let formattedTranscript = "";
+  let currentSpeaker = "";
+  let currentSentence = "";
+
+  for (const word of words) {
+    if (word.speakerId && word.speakerId !== currentSpeaker) {
+      if (currentSentence.trim()) {
+        formattedTranscript += currentSentence.trim() + "\n\n";
+      }
+      currentSpeaker = word.speakerId;
+      const speakerNumber = currentSpeaker.replace("speaker_", "");
+      const speakerLabel = `Speaker ${parseInt(speakerNumber) + 1}`;
+      formattedTranscript += `${speakerLabel}\n`;
+      currentSentence = "";
+    }
+    if (word.text) {
+      currentSentence += word.text + " ";
+    }
+  }
+
+  if (currentSentence.trim()) {
+    formattedTranscript += currentSentence.trim();
+  }
+
+  return formattedTranscript;
+}
 
 /**
  * Create a fallback summary when LLM summarization fails
@@ -79,6 +121,32 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const audioFile = formData.get("audio") as Blob | null;
+    // Optional enhancements: topics and template
+    const topicsRaw = formData.get("topics");
+    const templateRaw = formData.get("template");
+    let topics: string[] | undefined;
+    let template: string | undefined;
+    if (typeof topicsRaw === "string") {
+      try {
+        const parsed = JSON.parse(topicsRaw);
+        if (Array.isArray(parsed)) {
+          topics = parsed.filter((t) => typeof t === "string");
+        } else if (typeof parsed === "string") {
+          topics = parsed
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        }
+      } catch {
+        topics = topicsRaw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+    if (typeof templateRaw === "string") {
+      template = templateRaw.trim() || undefined;
+    }
 
     if (!audioFile) {
       console.log("[voice-meeting-minutes] No audio file in formData");
@@ -114,28 +182,31 @@ export async function POST(request: NextRequest) {
 
     // Handle different response types from ElevenLabs
     let transcriptText: string;
-
-    if (typeof transcription === "string") {
-      transcriptText = transcription;
-    } else if (transcription && typeof transcription === "object") {
-      // Check for text property in various possible locations
-      if ("text" in transcription && typeof transcription.text === "string") {
-        transcriptText = transcription.text;
-      } else if (
-        "transcription" in transcription &&
-        typeof transcription.transcription === "string"
-      ) {
-        transcriptText = transcription.transcription;
-      } else if (
-        "segments" in transcription &&
-        Array.isArray(transcription.segments)
-      ) {
-        // If it's a multichannel response, extract text from segments
-        transcriptText = transcription.segments
-          .map((segment: { text?: string }) => segment.text || "")
+    // When diarization words are available, mirror voice-transcribe speaker formatting
+    const respObj = transcription as unknown as
+      | {
+          words?: TranscriptWord[];
+          text?: string;
+          transcription?: string;
+          segments?: Array<{ text?: string }>;
+        }
+      | string
+      | null;
+    if (typeof respObj === "string") {
+      transcriptText = respObj;
+    } else if (respObj && typeof respObj === "object") {
+      if (Array.isArray(respObj.words) && respObj.words.length > 0) {
+        transcriptText = formatTranscriptWithSpeakers(respObj.words);
+      } else if (typeof respObj.text === "string") {
+        transcriptText = respObj.text;
+      } else if (typeof respObj.transcription === "string") {
+        transcriptText = respObj.transcription;
+      } else if (Array.isArray(respObj.segments)) {
+        transcriptText = respObj.segments
+          .map((segment) => segment.text || "")
           .join(" ");
       } else {
-        transcriptText = JSON.stringify(transcription);
+        transcriptText = JSON.stringify(respObj);
       }
     } else {
       transcriptText = "No transcription result";
@@ -146,6 +217,8 @@ export async function POST(request: NextRequest) {
       preview: transcriptText.slice(0, 100),
     });
 
+    // Continue with summarization after transcription
+
     // Step 2: Summarize with Groq
     console.log("[voice-meeting-minutes] Starting summarization with Groq...");
 
@@ -153,8 +226,18 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.GROQ_API_KEY,
     });
 
-    // Use the model from config instead of hardcoding
+    // Use model from config
     let model: string = MEETING_PROCESSOR_CONFIG.summarization.model;
+
+    // Build dynamic prompt components based on optional topics and template
+    const topicsInstruction = topics && topics.length > 0
+      ? `\n- روی موضوعات زیر تمرکز کن و مطمئن شو پوشش داده شوند: ${topics
+          .map((t) => `«${t}»`)
+          .join("، ")}`
+      : "";
+    const templateInstruction = template
+      ? `\n\nدر صورت امکان، خروجی را مطابق قالب زیر ساختاربندی کن (در صورت عدم انطباق کامل، نزدیک‌ترین ساختار منطقی را ارائه بده):\n${template}`
+      : "";
 
     const systemPrompt = `شما یک دستیار هستید که باید از متن پیاده‌سازی شده یک جلسه کاری (به زبان فارسی) صورتجلسه رسمی و بی‌طرف تهیه کنید.
 
@@ -189,9 +272,15 @@ export async function POST(request: NextRequest) {
 - از تکرار مباحث مشابه خودداری کنید، فقط نتیجه نهایی را ذکر کنید.
 - اگر مسئول یا زمان‌بندی ذکر نشد، خالی بگذارید.
 - خروجی باید کوتاه، شفاف و ساختاریافته باشد.
-- هیچ نظر یا تحلیل شخصی اضافه نکنید.`;
+- هیچ نظر یا تحلیل شخصی اضافه نکنید.${topicsInstruction}${templateInstruction}`;
 
-    const userPrompt = `لطفاً رونویسی زیر را به صورت خلاصه جلسه حرفه‌ای ارائه دهید:
+    const userPrompt = `لطفاً رونویسی زیر را به صورت خلاصه جلسه حرفه‌ای ارائه دهید.${
+      topics && topics.length > 0
+        ? `\nروی موضوعات منتخب کاربر تمرکز کن: ${topics
+            .map((t) => `«${t}»`)
+            .join("، ")}`
+        : ""
+    }${template ? "\nقالب ترجیحی کاربر لحاظ شود (در حد امکان)." : ""}
 
 ${transcriptText}`;
 
@@ -250,7 +339,7 @@ ${transcriptText}`;
           throw chunkingError; // This will be caught by the outer try-catch
         }
 
-        // Process each chunk with the appropriate model
+        // Process each chunk with OSS models only
         const chunkSummaries: string[] = [];
 
         for (let i = 0; i < chunks.length; i++) {
@@ -261,19 +350,21 @@ ${transcriptText}`;
             } (${chunk.estimatedTokens} tokens)`
           );
 
-          // Select appropriate model for this chunk
-          let chunkModel = model;
-          if (chunk.estimatedTokens > 12000) {
-            chunkModel = "mixtral-8x7b-32768";
-          } else if (chunk.estimatedTokens > 8000) {
-            chunkModel = "llama-3.3-70b-versatile";
-          }
+          // Use config model for all chunks
+          const chunkModel = MEETING_PROCESSOR_CONFIG.summarization.model;
 
-          const chunkUserPrompt = `لطفاً رونویسی زیر را به صورت خلاصه جلسه حرفه‌ای ارائه دهید:
+          const chunkUserPrompt = `لطفاً رونویسی زیر را به صورت خلاصه جلسه حرفه‌ای ارائه دهید.${
+            topics && topics.length > 0
+              ? `\nروی موضوعات منتخب کاربر تمرکز کن: ${topics
+                  .map((t) => `«${t}»`)
+                  .join("، ")}`
+              : ""
+          }${template ? "\nقالب ترجیحی کاربر لحاظ شود (در حد امکان)." : ""}
 
 ${chunk.content}`;
 
           try {
+
             const chunkCompletion = await groq.chat.completions.create({
               messages: [
                 {
@@ -287,7 +378,10 @@ ${chunk.content}`;
               ],
               model: chunkModel,
               temperature: MEETING_PROCESSOR_CONFIG.summarization.temperature,
-              max_tokens: 2000,
+              max_completion_tokens: MEETING_PROCESSOR_CONFIG.summarization.maxCompletionTokens,
+              top_p: MEETING_PROCESSOR_CONFIG.summarization.topP,
+
+              reasoning_effort : MEETING_PROCESSOR_CONFIG.summarization.reasoningEffort as "default" | "none" | null | undefined,
             });
 
             const chunkSummary =
@@ -311,14 +405,14 @@ ${chunk.content}`;
               error
             );
 
-            // Try with a different model as fallback
+            // Try with OSS fallback model
             try {
               console.log(
                 `[voice-meeting-minutes] Retrying chunk ${
                   i + 1
                 } with fallback model`
               );
-              const fallbackModel = "llama-3.1-8b-instant"; // Highest capacity model
+              const fallbackModel = "llama-3.1-8b-instant"; // OSS fallback
 
               const fallbackCompletion = await groq.chat.completions.create({
                 messages: [
@@ -333,7 +427,9 @@ ${chunk.content}`;
                 ],
                 model: fallbackModel,
                 temperature: MEETING_PROCESSOR_CONFIG.summarization.temperature,
-                max_tokens: 2000,
+                max_completion_tokens: MEETING_PROCESSOR_CONFIG.summarization.maxCompletionTokens,
+                top_p: MEETING_PROCESSOR_CONFIG.summarization.topP,
+                reasoning_effort: MEETING_PROCESSOR_CONFIG.summarization.reasoningEffort as "default" | "none" | null | undefined,
               });
 
               const fallbackSummary =
@@ -388,17 +484,11 @@ ${chunk.content}`;
 
         // Handle token limit issues
         if (tokenCheck.recommendedAction === "error") {
-          // Instead of throwing error, try with a different model
+          // Use config model (should handle large contexts)
           console.log(
-            "[voice-meeting-minutes] Token limit exceeded, trying with recommended model"
+            "[voice-meeting-minutes] Token limit exceeded, using config model"
           );
-          const recommendedModel = getRecommendedModel(
-            tokenCheck.estimatedTokens
-          );
-          console.log(
-            `[voice-meeting-minutes] Switching to recommended model: ${recommendedModel}`
-          );
-          model = recommendedModel;
+          model = MEETING_PROCESSOR_CONFIG.summarization.model;
         }
 
         if (tokenCheck.recommendedAction === "truncate") {
@@ -420,7 +510,7 @@ ${chunk.content}`;
 
 ${transcriptText}`;
 
-          // Recheck token limits
+          // Recheck token limits with OSS model
           const newTokenCheck = checkTokenLimits(
             systemPrompt,
             truncatedUserPrompt,
@@ -428,14 +518,11 @@ ${transcriptText}`;
             "fa"
           );
           if (!newTokenCheck.isWithinLimit) {
-            // Try with a different model
-            const recommendedModel = getRecommendedModel(
-              newTokenCheck.estimatedTokens
-            );
+            // Use config model (should handle large contexts)
             console.log(
-              `[voice-meeting-minutes] Switching to recommended model: ${recommendedModel}`
+              `[voice-meeting-minutes] Using config model for large context`
             );
-            model = recommendedModel;
+            model = MEETING_PROCESSOR_CONFIG.summarization.model;
           }
         }
 
@@ -452,9 +539,11 @@ ${transcriptText}`;
                 content: userPrompt,
               },
             ],
-            model: model, // Use config model instead of hardcoded one
+            model: model,
             temperature: MEETING_PROCESSOR_CONFIG.summarization.temperature,
-            max_tokens: 2000,
+            max_completion_tokens: MEETING_PROCESSOR_CONFIG.summarization.maxCompletionTokens,
+            top_p: MEETING_PROCESSOR_CONFIG.summarization.topP,
+            reasoning_effort: MEETING_PROCESSOR_CONFIG.summarization.reasoningEffort as "default" | "none" | null | undefined,
           });
 
           meetingMinutes =
@@ -466,9 +555,9 @@ ${transcriptText}`;
             apiError
           );
 
-          // Try with the highest capacity model as last resort
+          // Try with OSS model as last resort
           try {
-            const lastResortModel = "llama-3.1-8b-instant";
+            const lastResortModel = "llama-3.1-8b-instant"; // OSS model
             console.log(
               `[voice-meeting-minutes] Trying with last resort model: ${lastResortModel}`
             );
@@ -486,7 +575,9 @@ ${transcriptText}`;
               ],
               model: lastResortModel,
               temperature: MEETING_PROCESSOR_CONFIG.summarization.temperature,
-              max_tokens: 2000,
+              max_completion_tokens: MEETING_PROCESSOR_CONFIG.summarization.maxCompletionTokens,
+              top_p: MEETING_PROCESSOR_CONFIG.summarization.topP,
+              reasoning_effort: MEETING_PROCESSOR_CONFIG.summarization.reasoningEffort as "default" | "none" | null | undefined,
             });
 
             meetingMinutes =
@@ -528,6 +619,14 @@ ${transcriptText}`;
     return NextResponse.json({
       transcript: transcriptText,
       meetingMinutes: meetingMinutes,
+      processing: {
+        transcriptReady: true,
+        meetingMinutesReady: true,
+      },
+      preferences: {
+        topics: topics || [],
+        template: template || null,
+      },
       summarization: {
         success: summarizationSuccess,
         error: summarizationError,

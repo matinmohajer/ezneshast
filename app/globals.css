@@ -140,6 +140,8 @@ body {
   border-collapse: collapse;
   margin: 1rem 0;
   direction: rtl;
+  color: #111827; /* ensure readable text on light */
+  background: #ffffff;
 }
 
 .markdown-table th,
@@ -161,6 +163,63 @@ body {
 .markdown-table tr:hover {
   background-color: #f3f4f6;
 }
+
+/* Dark mode table readability */
+.dark .markdown-table {
+  color: #f3f4f6; /* gray-100 */
+  background: #111827; /* gray-900 */
+}
+.dark .markdown-table th,
+.dark .markdown-table td {
+  border-color: rgba(243, 244, 246, 0.18);
+}
+.dark .markdown-table th {
+  background: rgba(255, 255, 255, 0.06);
+}
+.dark .markdown-table tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.03);
+}
+.dark .markdown-table tr:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Inline code badges readable in both modes */
+.prose :where(code):not(:where(pre code)) {
+  background: rgba(0, 0, 0, 0.04);
+  color: inherit;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+.dark .prose :where(code):not(:where(pre code)) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Toast UI Editor readability tweaks */
+.toastui-editor-contents,
+.toastui-editor-defaultUI {
+  background-color: #ffffff;
+}
+.dark .toastui-editor-contents,
+.dark .toastui-editor-defaultUI {
+  /* color: #f3f4f6; */
+}
+.toastui-editor-contents table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.toastui-editor-contents th,
+.toastui-editor-contents td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+}
+.dark .toastui-editor-contents th,
+.dark .toastui-editor-contents td {
+  border-color: rgba(243, 244, 246, 0.18);
+}
+.toastui-editor-contents th { background: #f9fafb; }
+.dark .toastui-editor-contents th { background: rgba(255,255,255,0.06); }
+.toastui-editor-contents pre code { background: #f3f4f6; color: #111827; }
+.dark .toastui-editor-contents pre code { background: rgba(255,255,255,0.08); color: #f3f4f6; }
 
 /* RTL support for markdown content */
 [dir="rtl"] .prose {

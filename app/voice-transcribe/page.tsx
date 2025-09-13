@@ -376,14 +376,11 @@ export default function VoiceTranscribePage() {
               >
                 💾 Download
               </button>
+              {null}
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 p-6">
-            <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-900 dark:text-gray-100 font-mono">
-              {transcript}
-            </div>
-          </div>
+          {null}
         </section>
       )}
     </main>

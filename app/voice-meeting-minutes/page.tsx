@@ -1,8 +1,13 @@
 "use client";
 
-import { useState, useRef, useTransition, ComponentProps } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import React, { useState, useRef, useTransition } from "react";
+import dynamic from "next/dynamic";
+import "@toast-ui/editor/dist/toastui-editor.css";
+const ToastEditor = dynamic(
+  () => import("@toast-ui/react-editor").then((mod) => mod.Editor ),
+  { ssr: false }
+);
+const ToastEditorAny = ToastEditor ;
 import AudioPlayer from "@/app/components/media/AudioPlayer";
 import TranscriptLine from "@/app/components/transcript/TranscriptLine";
 import { Skeleton } from "@/app/components/ui/Skeleton";
@@ -14,6 +19,10 @@ interface ProcessingResult {
   transcript: string;
   meetingMinutes: string;
   processingTime: number;
+  processing?: {
+    transcriptReady: boolean;
+    meetingMinutesReady: boolean;
+  };
 }
 
 export default function VoiceMeetingMinutesPage() {
@@ -28,25 +37,13 @@ export default function VoiceMeetingMinutesPage() {
   const debouncedQuery = useDebounce(query, 200);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const playerRef = useRef<AudioPlayerHandle | null>(null);
+  const [topicsText, setTopicsText] = useState("");
+  const [templateText, setTemplateText] = useState("");
+  const [editableMinutes, setEditableMinutes] = useState("");
+  const [editableTranscript, setEditableTranscript] = useState("");
+  const pdfRef = useRef<HTMLDivElement | null>(null);
+  const editorRef = useRef(null);
 
-  // Custom components for ReactMarkdown
-  const markdownComponents = {
-    table: ({ children, ...props }: ComponentProps<"table">) => (
-      <table className="markdown-table" {...props}>
-        {children}
-      </table>
-    ),
-    th: ({ children, ...props }: ComponentProps<"th">) => (
-      <th className=" " {...props}>
-        {children}
-      </th>
-    ),
-    td: ({ children, ...props }: ComponentProps<"td">) => (
-      <td className="" {...props}>
-        {children}
-      </td>
-    ),
-  };
 
   /* ─────────── handlers ─────────── */
   const startRecording = async () => {
@@ -83,6 +80,8 @@ export default function VoiceMeetingMinutesPage() {
           try {
             const result = await processVoiceToMeetingMinutes(blob);
             setResult(result);
+            setEditableMinutes(result.meetingMinutes || "");
+            setEditableTranscript(result.transcript || "");
           } catch (err) {
             console.error(err);
             alert("Processing failed – check console for details.");
@@ -116,6 +115,8 @@ export default function VoiceMeetingMinutesPage() {
       try {
         const result = await processVoiceToMeetingMinutes(file);
         setResult(result);
+        setEditableMinutes(result.meetingMinutes || "");
+        setEditableTranscript(result.transcript || "");
       } catch (err) {
         console.error(err);
         alert("Processing failed – check console for details.");
@@ -130,6 +131,19 @@ export default function VoiceMeetingMinutesPage() {
 
     const formData = new FormData();
     formData.append("audio", audioBlob);
+    // Attach optional preferences
+    if (topicsText.trim()) {
+      const topics = topicsText
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (topics.length > 0) {
+        formData.append("topics", JSON.stringify(topics));
+      }
+    }
+    if (templateText.trim()) {
+      formData.append("template", templateText.trim());
+    }
 
     const response = await fetch("/api/voice-meeting-minutes", {
       method: "POST",
@@ -148,12 +162,13 @@ export default function VoiceMeetingMinutesPage() {
       transcript: data.transcript,
       meetingMinutes: data.meetingMinutes,
       processingTime,
+      processing: data.processing,
     };
   };
 
   const downloadMeetingMinutes = () => {
     if (!result) return;
-    const content = `# Meeting Minutes\n\n## Transcript\n${result.transcript}\n\n## Summary\n${result.meetingMinutes}`;
+    const content = `# Meeting Minutes\n\n## Summary\n${editableMinutes || result.meetingMinutes}\n\n## Transcript\n${editableTranscript || result.transcript}`;
     const blob = new Blob([content], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = Object.assign(document.createElement("a"), {
@@ -167,7 +182,7 @@ export default function VoiceMeetingMinutesPage() {
   const copyMeetingMinutes = async () => {
     if (!result) return;
     try {
-      await navigator.clipboard.writeText(result.meetingMinutes);
+      await navigator.clipboard.writeText(editableMinutes || result.meetingMinutes);
       alert("Meeting minutes copied to clipboard!");
     } catch (err) {
       console.error("Failed to copy to clipboard:", err);
@@ -177,11 +192,45 @@ export default function VoiceMeetingMinutesPage() {
   const copyTranscript = async () => {
     if (!result) return;
     try {
-      await navigator.clipboard.writeText(result.transcript);
+      await navigator.clipboard.writeText(editableTranscript || result.transcript);
       alert("Transcript copied to clipboard!");
     } catch (err) {
       console.error("Failed to copy to clipboard:", err);
     }
+  };
+
+  const exportMinutesPdf = async () => {
+    if (!result) return;
+    const el = pdfRef.current;
+    if (!el) return;
+    const html2pdf = (await import("html2pdf.js")).default;
+    // Use editor HTML for better fidelity
+    const minutesHtml = editorRef.current?.getInstance?.().getHTML?.() || "";
+    const transcriptText = editableTranscript || result.transcript;
+    el.innerHTML = `
+<html>
+  <head>
+    <meta charset=\"utf-8\" />
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #ffffff; color: #111827; }
+      h1, h2, h3 { color: #111827; }
+      table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+      th, td { border: 1px solid #e5e7eb; padding: 8px 10px; text-align: right; }
+      th { background: #f9fafb; }
+      pre, code { background: #f3f4f6; color: #111827; }
+    </style>
+  </head>
+  <body>
+    <h1>صورتجلسه</h1>
+    <section>${minutesHtml}</section>
+    <h2>متن اصلی</h2>
+    <pre style=\"white-space: pre-wrap;\">${transcriptText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>
+  </body>
+</html>`;
+    await html2pdf()
+      .from(el)
+      .set({ filename: "meeting-minutes.pdf", margin: 10, html2canvas: { scale: 2 } })
+      .save();
   };
 
   /* ─────────── UI ─────────── */
@@ -261,6 +310,39 @@ export default function VoiceMeetingMinutesPage() {
         </section>
       )}
 
+      {/* Preferences */}
+      <section className="w-full max-w-4xl space-y-3">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          تنظیمات خلاصه‌سازی
+        </h2>
+        <div className="grid grid-cols-1 gap-3">
+          <div className="space-y-1">
+            <label className="text-sm text-gray-700 dark:text-gray-200">
+              موضوعات مورد نظر (با کاما جدا کنید)
+            </label>
+            <input
+              type="text"
+              value={topicsText}
+              onChange={(e) => setTopicsText(e.target.value)}
+              placeholder="مثال: API, UI, انتشار نسخه"
+              className="h-10 w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-white/5 px-3 text-sm text-gray-900 dark:text-white shadow-sm"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm text-gray-700 dark:text-gray-200">
+              قالب سفارشی صورتجلسه (اختیاری)
+            </label>
+            <textarea
+              value={templateText}
+              onChange={(e) => setTemplateText(e.target.value)}
+              placeholder={"مثال:\n### 📌 صورتجلسه\n- تاریخ: \n- شرکت‌کنندگان: \n\n#### تصمیمات\n- ...\n\n#### اقدام‌ها\n- ..."}
+              rows={5}
+              className="w-full rounded-xl border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-white/5 p-3 text-sm text-gray-900 dark:text-white shadow-sm"
+            />
+          </div>
+        </div>
+      </section>
+
       {isPending && (
         <div className="w-full max-w-6xl space-y-6">
           <div className="flex items-center gap-2">
@@ -301,90 +383,129 @@ export default function VoiceMeetingMinutesPage() {
         <div className="w-full max-w-6xl space-y-6">
           {/* Processing Info */}
           <div className="text-center text-sm text-gray-500">
-            پردازش در {result.processingTime} میلی‌ثانیه تکمیل شد
+            {result.processing?.transcriptReady && result.processing?.meetingMinutesReady
+              ? `پردازش در ${result.processingTime} میلی‌ثانیه تکمیل شد`
+              : result.processing?.transcriptReady
+              ? "رونویسی آماده شد - در حال تولید خلاصه..."
+              : "در حال پردازش رونویسی..."}
           </div>
 
-          {/* Meeting Minutes */}
-          <section className="space-y-4" dir="rtl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                📝 خلاصه جلسه
-              </h2>
-              <div className="flex items-center gap-2">
+          {/* Meeting Minutes - Show when available */}
+          {result.meetingMinutes && (
+            <section className="space-y-4" dir="rtl">
+              <div className="flex items-center justify-between ">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  📝 خلاصه جلسه
+                </h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={copyMeetingMinutes}
+                    className="h-9 px-4 rounded-xl bg-green-100 hover:bg-green-200 text-green-900 text-sm"
+                  >
+                    📋 کپی خلاصه
+                  </button>
+                  <button
+                    onClick={downloadMeetingMinutes}
+                    className="h-9 px-4 rounded-xl bg-primary-100 hover:bg-primary-200 text-primary-900 text-sm"
+                  >
+                    💾 دانلود همه
+                  </button>
+                </div>
+              </div>
+
+              {/* Toast UI Editor for minutes (React wrapper) */}
+              <ToastEditorAny
+                ref={editorRef}
+                key={result.meetingMinutes}
+                initialValue={editableMinutes || result.meetingMinutes}
+                height="600px"
+                initialEditType="markdown"
+                previewStyle="vertical"
+                usageStatistics={false}
+                plugins={[]}
+                className={"bg-white"}
+                backgroundColor="#ffffff"
+                onChange={() => {
+                  const value = editorRef.current?.getInstance?.().getMarkdown?.() || "";
+                  setEditableMinutes(value);
+                }}
+              />
+              <div className="flex gap-2 justify-end">
                 <button
-                  onClick={copyMeetingMinutes}
-                  className="h-9 px-4 rounded-xl bg-green-100 hover:bg-green-200 text-green-900 text-sm"
+                  onClick={exportMinutesPdf}
+                  className="h-9 px-4 rounded-xl bg-emerald-100 hover:bg-emerald-200 text-emerald-900 text-sm"
                 >
-                  📋 کپی خلاصه
-                </button>
-                <button
-                  onClick={downloadMeetingMinutes}
-                  className="h-9 px-4 rounded-xl bg-primary-100 hover:bg-primary-200 text-primary-900 text-sm"
-                >
-                  💾 دانلود همه
+                  🧾 خروجی PDF
                 </button>
               </div>
-            </div>
+            </section>
+          )}
 
-            <div className="rounded-xl border border-green-200 bg-grey-50 dark:bg-grey-900 p-6">
-              <div className="prose prose-sm max-w-none text-gray-900 dark:text-gray-100">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={markdownComponents}
-                >
-                  {result.meetingMinutes}
-                </ReactMarkdown>
+          {/* Transcript - Show when available */}
+          {result.transcript && (
+            <section className="space-y-4" dir="rtl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  🎤 متن اصلی
+                </h2>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="جستجو در متن..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    className="h-9 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-white/5 px-3 text-sm text-gray-900 dark:text-white shadow-sm"
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={copyTranscript}
+                    className="h-9"
+                  >
+                    📋 کپی متن
+                  </Button>
+                </div>
               </div>
-            </div>
-          </section>
 
-          {/* Transcript */}
-          <section className="space-y-4" dir="rtl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                🎤 متن اصلی
-              </h2>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="جستجو در متن..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="h-9 w-56 rounded-xl border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-white/5 px-3 text-sm text-gray-900 dark:text-white shadow-sm"
+              <div className="bg-gray-50 dark:bg-white rounded-xl p-2 border border-gray-200 dark:border-white/10 space-y-1 dark:text-white">
+                {(editableTranscript || result.transcript || "")
+                  .split("\n")
+                  .filter(Boolean)
+                  .map((line, idx) => {
+                    const match = debouncedQuery.trim()
+                      ? line.toLowerCase().includes(debouncedQuery.toLowerCase())
+                      : true;
+                    if (!match) return null;
+                    return (
+                      <TranscriptLine
+                        key={idx}
+                        text={line}
+                        active={activeIndex === idx}
+                        onActivate={() => {
+                          setActiveIndex(idx);
+                          // playerRef.current?.seek(timestamp) // future when timestamps available
+                        }}
+                      />
+                    );
+                  })}
+              </div>
+
+              {/* Editor for transcript */}
+              <div className="rounded-xl border border-gray-200 dark:border-white/10 bg-white/70 dark:bg-white/5 p-3">
+                <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-200">
+                  ویرایش متن اصلی
+                </label>
+                <textarea
+                  value={editableTranscript}
+                  onChange={(e) => setEditableTranscript(e.target.value)}
+                  rows={8}
+                  className="w-full rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-transparent p-3 text-sm text-gray-900 dark:text-gray-100"
                 />
-                <Button
-                  variant="secondary"
-                  onClick={copyTranscript}
-                  className="h-9"
-                >
-                  📋 کپی متن
-                </Button>
               </div>
-            </div>
+            </section>
+          )}
 
-            <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-2 border border-gray-200 dark:border-white/10 space-y-1">
-              {(result.transcript || "")
-                .split("\n")
-                .filter(Boolean)
-                .map((line, idx) => {
-                  const match = debouncedQuery.trim()
-                    ? line.toLowerCase().includes(debouncedQuery.toLowerCase())
-                    : true;
-                  if (!match) return null;
-                  return (
-                    <TranscriptLine
-                      key={idx}
-                      text={line}
-                      active={activeIndex === idx}
-                      onActivate={() => {
-                        setActiveIndex(idx);
-                        // playerRef.current?.seek(timestamp) // future when timestamps available
-                      }}
-                    />
-                  );
-                })}
-            </div>
-          </section>
+          {/* Hidden container used for PDF export */}
+          <div className="sr-only"><div ref={pdfRef}></div></div>
         </div>
       )}
     </main>

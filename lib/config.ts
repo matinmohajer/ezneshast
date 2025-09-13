@@ -14,6 +14,9 @@ export const MEETING_PROCESSOR_CONFIG = {
   summarization: {
     model: "openai/gpt-oss-120b",
     temperature: 0.1,
+    maxCompletionTokens: 38101,
+    topP: 1,
+    reasoningEffort: "high" as const,
     systemPrompt:
       "شما یک دستیار خلاصه‌نویس هستید که رونویسی جلسات را به فارسی و به صورت Markdown خلاصه می‌کند. از افزودن هرگونه اطلاعاتی که در متن جلسه نیامده خودداری کن. خروجی باید شامل بخش‌های مربوط (مثلاً خلاصهٔ کلی، موارد اقدام و ...) باشد و فقط بر اساس متن ارائه‌شده تولید شود.",
   },
